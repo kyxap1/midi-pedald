@@ -75,6 +75,22 @@ def test_start_is_queued_and_resets_the_meter_window():
     assert dae._bpm._t0 is None
 
 
+def test_input_enumeration_error_is_swallowed_not_raised():
+    # rtmidi raises InvalidPortError when a device is unplugged mid-scan; the
+    # daemon must see an empty list, not a traceback in the log.
+    class Angry:
+        def get_input_names(self):
+            raise RuntimeError("portNumber (1) is invalid")
+
+    saved = daemon.mido
+    daemon.mido = Angry()
+    try:
+        assert daemon._input_names() == []
+        assert daemon.find_input("Scarlett") is None
+    finally:
+        daemon.mido = saved
+
+
 def test_run_pumps_ensure_connected_on_every_sink_then_stops_cleanly():
     a = FakeSink()
 

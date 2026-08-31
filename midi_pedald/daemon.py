@@ -20,9 +20,18 @@ log = logging.getLogger("midi_pedald")
 _PORT_POLL_S = 2.0
 
 
+def _input_names() -> list[str]:
+    # rtmidi raises mid-enumeration when a device is unplugged during the scan;
+    # treat that as "nothing visible", mirroring MidiSink._output_names.
+    try:
+        return list(mido.get_input_names())
+    except Exception:
+        return []
+
+
 def find_input(substring: str) -> str | None:
     sub = substring.lower()
-    for name in mido.get_input_names():
+    for name in _input_names():
         if sub in name.lower():
             return name
     return None
@@ -88,7 +97,7 @@ class Daemon:
         if self._port is not None:
             if now >= self._next_poll:
                 self._next_poll = now + _PORT_POLL_S
-                if self._port.name not in mido.get_input_names():
+                if self._port.name not in _input_names():
                     log.info("MIDI input disappeared: %s", self._port.name)
                     self._close_port()
             return
