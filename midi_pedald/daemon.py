@@ -1,5 +1,5 @@
-"""Glue: keep a MIDI input and an OBS connection alive, feed incoming events
-through the rule table, dispatch the resulting actions. Never raises out of run()."""
+"""Glue: keep a MIDI input and every sink alive, feed incoming events through the
+rule table, dispatch each matching rule to its sink. Never raises out of run()."""
 from __future__ import annotations
 
 import logging
@@ -31,18 +31,19 @@ def find_input(substring: str) -> str | None:
 #   ensure_connected(now) -> bool    own backoff/poll; never raises
 #   dispatch(method, **params)       no-op + one log line when disconnected; never raises
 #   connected -> bool                for logging only
-_SINK_FACTORIES = {
-    "obs": lambda cfg: ObsController(cfg.obs),
+_SINK_BUILDERS = {
+    "obs": ObsController,
 }
 
 
-def _build_sinks(cfg: Config, factories: dict | None = None) -> dict[str, object]:
-    """Construct each configured sink. A sink that fails to build is logged and
-    skipped so the others still run."""
+def _build_sinks(cfg: Config, builders: dict | None = None) -> dict[str, object]:
+    """Construct each configured sink from its config block. A sink that fails to
+    build is logged and skipped so the others still run."""
+    builders = builders or _SINK_BUILDERS
     out: dict[str, object] = {}
-    for name, factory in (factories or _SINK_FACTORIES).items():
+    for name, sink_cfg in cfg.sinks.items():
         try:
-            out[name] = factory(cfg)
+            out[name] = builders[name](sink_cfg)
         except Exception:
             log.exception("sink %r failed to initialise; continuing without it", name)
     return out
@@ -97,25 +98,27 @@ class Daemon:
 
     def _handle(self, msg) -> None:
         ev = to_event(msg)
-        d = self.rules.decide(ev, time.monotonic())
-        if d.action is None:
-            log.debug("MIDI %s -> nothing (%s)", ev, d.reason)
+        decisions = self.rules.decide_all(ev, time.monotonic())
+        if not decisions:
+            log.debug("MIDI %s -> nothing (no rule matched)", ev)
             return
-        log.debug("MIDI %s -> %s (%s)", ev, d.action, d.reason)
-        sink = self.sinks.get("obs")
-        if sink is None:
-            log.debug("MIDI %s -> %s dropped: no 'obs' sink", ev, d.action)
-            return
-        sink.dispatch(d.action)
+        for d in decisions:
+            sink = self.sinks.get(d.sink)
+            if sink is None:
+                # config validation rejects this, so only reachable if the sink
+                # failed to build at startup.
+                log.warning("rule %d: sink %r unavailable, dropping %s", d.rule_index, d.sink, d.method)
+                continue
+            log.debug("MIDI %s -> %s.%s (%s)", ev, d.sink, d.method, d.reason)
+            sink.dispatch(d.method, **d.params)
 
     def run(self) -> None:
         signal.signal(signal.SIGTERM, self._on_signal)
         signal.signal(signal.SIGINT, self._on_signal)
         log.info(
-            "midi-pedald starting (midi~=%r, obs=%s:%d)",
+            "midi-pedald starting (midi~=%r, sinks=[%s])",
             self.cfg.midi_port_substring,
-            self.cfg.obs.host,
-            self.cfg.obs.port,
+            ", ".join(self.sinks) or "none",
         )
         while not self._stop:
             try:

@@ -13,20 +13,21 @@ from tests.fakes import FakeMido, FakeSink, start  # noqa: E402
 daemon.mido = FakeMido()
 
 
-def cfg(rules=None):
+def cfg(rules=None, sinks=None):
     return Config(
         midi_port_substring="Scarlett",
-        obs=ObsConfig(),
+        sinks=sinks if sinks is not None else {"obs": ObsConfig()},
         log=LogConfig(),
-        rules=rules or [Rule("start", "start_record")],
+        rules=rules or [Rule("start", "obs.start_record")],
     )
 
 
-def test_build_sinks_skips_a_failing_factory():
+def test_build_sinks_skips_a_sink_that_fails_to_build():
     def boom(_cfg):
         raise RuntimeError("no bus")
 
-    sinks = _build_sinks(cfg(), {"good": lambda c: FakeSink(), "bad": boom})
+    c = cfg(sinks={"good": ObsConfig(), "bad": ObsConfig()})
+    sinks = _build_sinks(c, {"good": lambda sc: FakeSink(), "bad": boom})
     assert set(sinks) == {"good"}
 
 
@@ -34,9 +35,9 @@ def test_surviving_sink_still_receives_dispatch_after_a_sibling_fails_to_build()
     def boom(_cfg):
         raise RuntimeError("no bus")
 
-    sinks = _build_sinks(cfg(), {"obs": lambda c: FakeSink(), "bad": boom})
-    dae = Daemon(cfg(), sinks=sinks)
-    dae._handle(start())
+    c = cfg(sinks={"obs": ObsConfig(), "bad": ObsConfig()})
+    sinks = _build_sinks(c, {"obs": lambda sc: FakeSink(), "bad": boom})
+    Daemon(c, sinks=sinks)._handle(start())
     assert sinks["obs"].calls == [("start_record", {})]
 
 

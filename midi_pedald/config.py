@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .mapping import ACTIONS, EVENTS, Rule
+from .mapping import EVENTS, Rule
+from .obs_sink import OBS_METHODS
 
 
 class ConfigError(Exception):
@@ -17,6 +18,16 @@ class ObsConfig:
     host: str = "localhost"
     port: int = 4455
     password: str = ""
+
+
+# Sink type -> the method names a rule may name as "<sink>.<method>".
+# Extended by U4 (midi_out).
+SINK_METHODS: dict[str, frozenset] = {"obs": OBS_METHODS}
+
+# "<sink>.<method>" -> accepted param names / the subset that is required.
+# Absent entry means the method takes no params. Extended by U4.
+SINK_METHOD_PARAMS: dict[str, set] = {}
+SINK_METHOD_REQUIRED: dict[str, set] = {}
 
 
 _DEFAULT_LOG_FILE = "~/Library/Logs/midi-pedald/midi-pedald.log"
@@ -33,7 +44,7 @@ class LogConfig:
 @dataclass
 class Config:
     midi_port_substring: str
-    obs: ObsConfig
+    sinks: dict[str, object]
     log: LogConfig
     rules: list[Rule]
 
@@ -49,15 +60,42 @@ def _pair(value, where: str) -> tuple[int, int] | None:
     return (lo, hi)
 
 
-def rule_from_dict(d: dict, idx: int) -> Rule:
+def _validate_action(action, params: dict, declared_sinks, idx: int) -> None:
+    if not isinstance(action, str) or "." not in action:
+        raise ConfigError(f"rules[{idx}].action {action!r} must be 'sink.method'")
+    sink_name, method = action.split(".", 1)
+    if sink_name not in declared_sinks:
+        raise ConfigError(
+            f"rules[{idx}].action names sink {sink_name!r} but there is no sinks.{sink_name} block"
+        )
+    methods = SINK_METHODS.get(sink_name)
+    if methods is None:
+        raise ConfigError(f"rules[{idx}].action names unknown sink type {sink_name!r}")
+    if method not in methods:
+        raise ConfigError(
+            f"rules[{idx}].action {action!r}: sink {sink_name!r} has no method {method!r}"
+        )
+    allowed = SINK_METHOD_PARAMS.get(action, set())
+    extra = set(params) - allowed
+    if extra:
+        raise ConfigError(
+            f"rules[{idx}].params has keys {sorted(extra)} not accepted by {action}"
+        )
+    missing = SINK_METHOD_REQUIRED.get(action, set()) - set(params)
+    if missing:
+        raise ConfigError(f"rules[{idx}].params is missing {sorted(missing)} required by {action}")
+
+
+def rule_from_dict(d: dict, idx: int, declared_sinks) -> Rule:
     if not isinstance(d, dict):
         raise ConfigError(f"rules[{idx}] must be a mapping")
     event = d.get("event")
     if event not in EVENTS:
         raise ConfigError(f"rules[{idx}].event {event!r} not one of {list(EVENTS)}")
-    action = d.get("action")
-    if action not in ACTIONS:
-        raise ConfigError(f"rules[{idx}].action {action!r} not one of {list(ACTIONS)}")
+    params = d.get("params") or {}
+    if not isinstance(params, dict):
+        raise ConfigError(f"rules[{idx}].params must be a mapping")
+    _validate_action(d.get("action"), params, declared_sinks, idx)
     number = d.get("number")
     if number is not None and not isinstance(number, int):
         raise ConfigError(f"rules[{idx}].number must be an integer")
@@ -68,12 +106,33 @@ def rule_from_dict(d: dict, idx: int) -> Rule:
         raise ConfigError(f"rules[{idx}] control_change needs a number and/or value_range")
     return Rule(
         event=event,
-        action=action,
+        action=d["action"],
         debounce_ms=debounce,
         number=number,
         number_range=_pair(d.get("range"), f"rules[{idx}].range"),
         value_range=_pair(d.get("value_range"), f"rules[{idx}].value_range"),
+        params=params,
     )
+
+
+def _parse_sinks(data: dict) -> dict[str, object]:
+    raw = data.get("sinks")
+    if not isinstance(raw, dict) or not raw:
+        raise ConfigError("sinks must be a non-empty mapping")
+    out: dict[str, object] = {}
+    for name, sc in raw.items():
+        sc = sc or {}
+        if not isinstance(sc, dict):
+            raise ConfigError(f"sinks.{name} must be a mapping")
+        if name == "obs":
+            out["obs"] = ObsConfig(
+                host=str(sc.get("host", "localhost")),
+                port=int(sc.get("port", 4455)),
+                password=str(sc.get("password", "") or ""),
+            )
+        else:
+            raise ConfigError(f"unknown sink {name!r} (known: {sorted(SINK_METHODS)})")
+    return out
 
 
 def load(path: str | Path) -> Config:
@@ -96,12 +155,7 @@ def load(path: str | Path) -> Config:
     if not substring or not isinstance(substring, str):
         raise ConfigError("midi.port_substring is required and must be a string")
 
-    o = data.get("obs") or {}
-    obs = ObsConfig(
-        host=str(o.get("host", "localhost")),
-        port=int(o.get("port", 4455)),
-        password=str(o.get("password", "") or ""),
-    )
+    sinks = _parse_sinks(data)
 
     lg = data.get("logging") or {}
     log = LogConfig(
@@ -114,6 +168,6 @@ def load(path: str | Path) -> Config:
     rules_raw = data.get("rules")
     if not isinstance(rules_raw, list) or not rules_raw:
         raise ConfigError("rules must be a non-empty list")
-    rules = [rule_from_dict(d, i) for i, d in enumerate(rules_raw)]
+    rules = [rule_from_dict(d, i, set(sinks)) for i, d in enumerate(rules_raw)]
 
-    return Config(midi_port_substring=substring, obs=obs, log=log, rules=rules)
+    return Config(midi_port_substring=substring, sinks=sinks, log=log, rules=rules)

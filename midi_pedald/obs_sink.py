@@ -14,6 +14,17 @@ log = logging.getLogger("midi_pedald")
 _BACKOFF_START = 1.0
 _BACKOFF_MAX = 30.0
 
+# Methods this sink exposes to rules as "obs.<name>". All take no parameters.
+OBS_METHODS = frozenset({
+    "start_record",
+    "stop_record",
+    "toggle_record",
+    "split_record_file",
+    "save_replay_buffer",
+    "start_replay_buffer",
+    "stop_replay_buffer",
+})
+
 # action -> obs-websocket request name that must appear in GetVersion.availableRequests.
 # SplitRecordFile landed in obs-websocket 5.5.0 (OBS Studio 30.2); everything else
 # in the mapping has existed since 5.0.0.
@@ -96,8 +107,6 @@ class ObsController:
     def dispatch(self, method: str, **params) -> None:
         # OBS record commands take no parameters; params is accepted for a
         # uniform sink contract and ignored here.
-        if method == "noop":
-            return
         if not self.ensure_connected():
             log.info("skipping %s: OBS not connected", method)
             return
