@@ -99,3 +99,65 @@ class Clock:
 
     def __call__(self):
         return self.t
+
+
+class FakeSink:
+    """Records what the daemon dispatches; always 'connected'."""
+
+    def __init__(self):
+        self.calls: list[tuple[str, dict]] = []
+        self.ensure_calls = 0
+        self.connected = True
+
+    def ensure_connected(self, now) -> bool:
+        self.ensure_calls += 1
+        return True
+
+    def dispatch(self, method, **params) -> None:
+        self.calls.append((method, params))
+
+
+class FakePort:
+    def __init__(self, name, callback=None):
+        self.name = name
+        self.callback = callback
+        self.closed = False
+        self.sent: list = []
+
+    def send(self, msg):
+        self.sent.append(msg)
+
+    def close(self):
+        self.closed = True
+
+
+class FakeMido:
+    """Controllable stand-in for the mido module. Port lists are mutable so a
+    test can make a port appear or vanish between polls."""
+
+    def __init__(self, inputs=(), outputs=()):
+        self.inputs = list(inputs)
+        self.outputs = list(outputs)
+        self.opened: list[FakePort] = []
+        self.output_scans = 0
+
+    def get_input_names(self):
+        return list(self.inputs)
+
+    def get_output_names(self):
+        self.output_scans += 1
+        return list(self.outputs)
+
+    @staticmethod
+    def Message(type, **kw):
+        return types.SimpleNamespace(type=type, **kw)
+
+    def open_input(self, name, callback=None):
+        p = FakePort(name, callback)
+        self.opened.append(p)
+        return p
+
+    def open_output(self, name):
+        p = FakePort(name)
+        self.opened.append(p)
+        return p

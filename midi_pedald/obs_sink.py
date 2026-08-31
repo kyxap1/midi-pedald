@@ -6,13 +6,34 @@ its tests) load without the dependency installed.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
+from pathlib import Path
 
-log = logging.getLogger("midiobs")
+log = logging.getLogger("midi_pedald")
 
 _BACKOFF_START = 1.0
 _BACKOFF_MAX = 30.0
+
+# obs-websocket writes host-local connection settings here. Layout has been
+# stable across obs-websocket 5.x; a missing file or a changed schema just
+# falls back to the defaults below.
+_OBS_WS_CONFIG = Path(
+    "~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json"
+).expanduser()
+_DEFAULT_PORT = 4455
+
+# Methods this sink exposes to rules as "obs.<name>". All take no parameters.
+OBS_METHODS = frozenset({
+    "start_record",
+    "stop_record",
+    "toggle_record",
+    "split_record_file",
+    "save_replay_buffer",
+    "start_replay_buffer",
+    "stop_replay_buffer",
+})
 
 # action -> obs-websocket request name that must appear in GetVersion.availableRequests.
 # SplitRecordFile landed in obs-websocket 5.5.0 (OBS Studio 30.2); everything else
@@ -20,12 +41,44 @@ _BACKOFF_MAX = 30.0
 _GATED = {"split_record_file": "SplitRecordFile"}
 
 
+def _obs_ws_settings() -> dict:
+    try:
+        return json.loads(_OBS_WS_CONFIG.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _resolve_conn(cfg) -> tuple[str, int, str]:
+    """Fill an unset port / password from OBS's own obs-websocket config so a
+    bare `sinks: {obs: {}}` connects with nothing to copy-paste. An explicit
+    value in the daemon config always wins."""
+    host = cfg.host or "localhost"
+    port = cfg.port
+    password = cfg.password
+    if port is not None and password is not None:
+        return host, port, password
+    d = _obs_ws_settings()
+    if port is None:
+        port = int(d.get("server_port") or _DEFAULT_PORT)
+    if password is None:
+        password = str(d.get("server_password") or "") if d.get("auth_required", True) else ""
+    return host, port, password
+
+
 def _default_factory(cfg):
     import obsws_python
 
-    return obsws_python.ReqClient(
-        host=cfg.host, port=cfg.port, password=cfg.password, timeout=3
-    )
+    # obsws-python logs a full connect traceback at ERROR and the password at
+    # INFO on its own logger; ensure_connected already logs a one-line summary.
+    # A NullHandler stops logging's lastResort from dumping that to stderr
+    # (propagate=False alone does not); WARNING drops the password line.
+    _obsws_log = logging.getLogger("obsws_python")
+    _obsws_log.setLevel(logging.WARNING)
+    if not _obsws_log.handlers:
+        _obsws_log.addHandler(logging.NullHandler())
+
+    host, port, password = _resolve_conn(cfg)
+    return obsws_python.ReqClient(host=host, port=port, password=password, timeout=3)
 
 
 def _is_request_error(exc: BaseException) -> bool:
@@ -93,32 +146,32 @@ class ObsController:
         self._next_attempt = self._now() + self._backoff
         self._backoff = min(self._backoff * 2, _BACKOFF_MAX)
 
-    def dispatch(self, action: str) -> None:
-        if action == "noop":
-            return
+    def dispatch(self, method: str, **params) -> None:
+        # OBS record commands take no parameters; params is accepted for a
+        # uniform sink contract and ignored here.
         if not self.ensure_connected():
-            log.info("skipping %s: OBS not connected", action)
+            log.info("skipping %s: OBS not connected", method)
             return
-        cap = _GATED.get(action)
+        cap = _GATED.get(method)
         if cap and cap not in self._available:
             log.error(
                 "cannot %s: obs-websocket has no %s request "
                 "(SplitRecordFile requires OBS Studio 30.2+)",
-                action,
+                method,
                 cap,
             )
             return
-        handler = getattr(self, f"_do_{action}", None)
+        handler = getattr(self, f"_do_{method}", None)
         if handler is None:
-            log.error("unknown action: %s", action)
+            log.error("unknown action: %s", method)
             return
         try:
             handler()
         except Exception as e:
             if _is_request_error(e):
-                log.error("%s failed: %s", action, e)  # bad state, not a dead socket
+                log.error("%s failed: %s", method, e)  # bad state, not a dead socket
             else:
-                self._drop(f"{action}: {e}")
+                self._drop(f"{method}: {e}")
 
     def _record_active(self) -> bool:
         return bool(self._client.get_record_status().output_active)

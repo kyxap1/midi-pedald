@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # arm64 runner - the freeze is arm64-only, so the runner arch must match.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Keep in step with packaging/midi-pedald.spec.
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt -r packaging/requirements-build.txt pytest
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Build .pkg
+        run: packaging/build-pkg.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Smoke the frozen binary
+        run: ./dist/midi-pedald/midi-pedald --version
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/midi-pedald-*.pkg

@@ -3,12 +3,12 @@ title: "feat: midi-pedald — multi-sink MIDI pedal daemon with self-contained .
 date: 2026-08-30
 type: feat
 depth: deep
-status: active
+status: completed
 ---
 
 # feat: midi-pedald — multi-sink MIDI pedal daemon with self-contained .pkg
 
-**Target repo:** `midi-pedald` (currently on disk as `midi-obs-recorder`)
+**Target repo:** `midi-pedald` (merged from `midi-obs-recorder` and the `midibridge.py` prototype)
 
 ## Summary
 
@@ -76,12 +76,12 @@ IN, THRU → Alesis SR-18 → Scarlett 18i16 MIDI IN → Mac. Daemon output: IAC
 | Thing | Value |
 |---|---|
 | GitHub repo | `midi-pedald` |
-| Python package | `pedald` |
-| Executable | `pedald` |
-| launchd label | `pro.kyxap.pedald` |
-| Config | `~/Library/Application Support/pedald/config.yaml` |
-| Bundle | `~/Library/Application Support/pedald/bin/` |
-| Logs | `~/Library/Logs/pedald/` |
+| Python package | `midi_pedald` |
+| Executable | `midi-pedald` |
+| launchd label | `pro.kyxap.midi-pedald` |
+| Config | `~/.config/midi-pedald/config.yaml` |
+| Bundle | `~/Library/Application Support/midi-pedald/bin/` |
+| Logs | `~/Library/Logs/midi-pedald/` |
 
 `midi-obs-recorder` / `midiobs` / `com.rc5.midiobs` disappear entirely. No compatibility shim —
 the daemon has one user and no deployed installs to migrate.
@@ -169,7 +169,7 @@ bpm:
 
 logging:
   level: INFO
-  file: "~/Library/Logs/pedald/pedald.log"
+  file: "~/Library/Logs/midi-pedald/midi-pedald.log"
   max_bytes: 1048576
   backup_count: 3
 
@@ -190,7 +190,7 @@ CC 20 = record, 21 = stop, 22 = rewind — arbitrary numbers, learned on the Wav
 
 ```
 midi-pedald/
-├── pedald/
+├── midi_pedald/
 │   ├── __init__.py
 │   ├── __main__.py
 │   ├── bpm.py              # new: pure clock->BPM logic
@@ -201,9 +201,10 @@ midi-pedald/
 │   ├── midi_sink.py        # new
 │   └── obs_sink.py         # was obsctl.py
 ├── packaging/
-│   ├── pedald.spec         # PyInstaller
+│   ├── midi-pedald.spec    # PyInstaller
 │   ├── distribution.xml    # productbuild domains
-│   ├── postinstall         # launchd agent + first-run config
+│   ├── scripts/postinstall # launchd agent + first-run config
+│   ├── main.py             # absolute-import freeze entry point
 │   └── build-pkg.sh        # freeze + pkgbuild + productbuild
 ├── .github/workflows/release.yml
 ├── tests/
@@ -271,32 +272,32 @@ flowchart TD
     U7 --> U8[U8 README + config example + uninstall]
 ```
 
-### U1. Rename to `pedald` and move all paths under the user's home
+### U1. Rename to `midi_pedald` and move all paths under the user's home
 
-**Goal:** `midiobs` → `pedald` everywhere; every runtime path points into `~/Library/`.
+**Goal:** `midiobs` → `midi_pedald` everywhere; every runtime path points into the user's home.
 
 **Requirements:** R6
 
 **Dependencies:** none
 
-**Files:** `midiobs/` → `pedald/` (all modules), `midiobs/obsctl.py` → `pedald/obs_sink.py`,
+**Files:** `midiobs/` → `midi_pedald/` (all modules), `midiobs/obsctl.py` → `midi_pedald/obs_sink.py`,
 `tests/test_obsctl.py` → `tests/test_obs_sink.py`, `tests/conftest.py`, `tests/fakes.py`,
 `config.example.yaml`, `requirements.txt`, `.gitignore`; delete `install.sh` and
 `launchd/com.rc5.midiobs.plist.template`.
 
 **Approach:** Mechanical rename plus a config-path default: when `--config` is absent, resolve
-`~/Library/Application Support/pedald/config.yaml`. Default log path becomes
-`~/Library/Logs/pedald/pedald.log`. The old `install.sh` and plist template die here rather than
-being carried to U6 and rewritten — U6 writes fresh packaging.
+`~/.config/midi-pedald/config.yaml`. Default log path becomes
+`~/Library/Logs/midi-pedald/midi-pedald.log`. The old `install.sh` and plist template die here
+rather than being carried to U6 and rewritten — U6 writes fresh packaging.
 
 **Patterns to follow:** existing `_setup_logging` in `cli.py` already expands `~`; keep that.
 
 **Test scenarios:**
 - Existing 28 tests pass unchanged after import renames — this unit changes no behaviour.
-- `--config` omitted resolves to the Application Support path (expanded, absolute).
+- `--config` omitted resolves to the `~/.config/midi-pedald` path (expanded, absolute).
 - `--config` given as a relative path is honoured as-is, not rewritten to the home default.
 
-**Verification:** full test suite green; `python -m pedald --version` runs; no string
+**Verification:** full test suite green; `python -m midi_pedald --version` runs; no string
 `midiobs` or `com.rc5` remains in the tree.
 
 ---
@@ -310,7 +311,7 @@ being carried to U6 and rewritten — U6 writes fresh packaging.
 
 **Dependencies:** U1
 
-**Files:** `pedald/obs_sink.py`, `pedald/daemon.py`, `tests/test_obs_sink.py`
+**Files:** `midi_pedald/obs_sink.py`, `midi_pedald/daemon.py`, `tests/test_obs_sink.py`
 
 **Approach:** `dispatch` changes from `dispatch(action)` to `dispatch(method, **params)` — OBS
 methods take no params, so the kwargs are accepted and ignored there. The daemon gains
@@ -320,7 +321,7 @@ registry, not as an ABC. Existing behaviour — backoff 1s→30s, `GetRecordStat
 `SplitRecordFile` capability gate, request-errors not dropping the socket — is unchanged.
 
 **Patterns to follow:** the existing `_GATED` capability map and `_is_request_error` name-match
-trick in `obsctl.py`; keep both.
+trick in `obs_sink.py`; keep both.
 
 **Test scenarios:**
 - Every existing OBS test passes against the new `dispatch(method)` signature.
@@ -342,7 +343,7 @@ trick in `obsctl.py`; keep both.
 
 **Dependencies:** U2
 
-**Files:** `pedald/mapping.py`, `pedald/config.py`, `pedald/daemon.py`,
+**Files:** `midi_pedald/mapping.py`, `midi_pedald/config.py`, `midi_pedald/daemon.py`,
 `tests/test_mapping.py`, `tests/test_config.py`, `config.example.yaml`
 
 **Approach:** `RuleTable.decide()` → `decide_all()` returning a list of `Decision`. Per-rule
@@ -385,7 +386,7 @@ timed CC sequences.
 
 **Dependencies:** U3
 
-**Files:** `pedald/midi_sink.py`, `tests/test_midi_sink.py`, `config.example.yaml`
+**Files:** `midi_pedald/midi_sink.py`, `tests/test_midi_sink.py`, `config.example.yaml`
 
 **Approach:** `mido.open_output()` matched by case-insensitive substring, mirroring the input
 side. `ensure_connected(now)` polls `mido.get_output_names()` every 2 s when disconnected and
@@ -422,7 +423,7 @@ input side's idiom. Sending on a vanished port drops the port and logs once, nev
 
 **Dependencies:** U1
 
-**Files:** `pedald/bpm.py`, `pedald/daemon.py`, `tests/test_bpm.py`, `config.example.yaml`
+**Files:** `midi_pedald/bpm.py`, `midi_pedald/daemon.py`, `tests/test_bpm.py`, `config.example.yaml`
 
 **Approach:** `bpm.py` is pure logic with zero third-party imports, matching `mapping.py`'s
 pattern so it tests on plain `python3`. A `BpmMeter` object takes `window_ticks`, `tolerance`,
@@ -475,30 +476,30 @@ daemon into `$HOME` with no Python, no network, no venv.
 
 **Dependencies:** U1, U4, U5
 
-**Files:** `packaging/pedald.spec`, `packaging/distribution.xml`, `packaging/postinstall`,
-`packaging/build-pkg.sh`, `requirements.txt`
+**Files:** `packaging/midi-pedald.spec`, `packaging/distribution.xml`, `packaging/main.py`,
+`packaging/scripts/postinstall`, `packaging/build-pkg.sh`, `requirements.txt`
 
 **Approach:** PyInstaller `--onedir`, arm64, with `mido.backends.rtmidi` as an explicit hidden
-import. Payload rooted so it lands at `Library/Application Support/pedald/bin/`. `pkgbuild`
+import. Payload rooted so it lands at `Library/Application Support/midi-pedald/bin/`. `pkgbuild`
 builds the component, `productbuild` applies `distribution.xml` carrying
 `<domains enable_currentUserHome="true" enable_localSystem="false" enable_anywhere="false"/>`.
-`postinstall` creates `~/Library/Logs/pedald/`, writes `config.yaml` from the bundled example
-**only if absent** (an upgrade must never clobber a tuned config), renders
-`~/Library/LaunchAgents/pro.kyxap.pedald.plist` with absolute paths, and
+`postinstall` creates `~/Library/Logs/midi-pedald/`, writes `~/.config/midi-pedald/config.yaml`
+from the bundled example **only if absent** (an upgrade must never clobber a tuned config),
+renders `~/Library/LaunchAgents/pro.kyxap.midi-pedald.plist` with absolute paths, and
 `launchctl bootout` + `bootstrap gui/$(id -u)` — matching the `bootstrap`/`print` idiom already
 used in the prototype's notes rather than the older `load`/`unload`.
 
 **Execution note:** verify the frozen binary before wiring the pkg around it — build, run
-`./dist/pedald/pedald --monitor` on the real Scarlett, and confirm the rtmidi backend actually
-loaded. The hidden-import failure mode is silent until the daemon tries to open a port.
+`./dist/midi-pedald/midi-pedald --monitor` on the real Scarlett, and confirm the rtmidi backend
+actually loaded. The hidden-import failure mode is silent until the daemon tries to open a port.
 
 **Test scenarios:** Test expectation: none — this unit is packaging with no importable behaviour.
 Its verification is the smoke checks below, which U7 then runs in CI.
 
 **Verification:**
 - Frozen binary runs `--version` and `--monitor` on a machine with the venv deactivated.
-- `pkgutil --expand` on the output shows the payload rooted under `Library/Application Support/pedald`.
-- Installing on a clean user account produces a running agent (`launchctl print gui/$(id -u)/pro.kyxap.pedald`).
+- `pkgutil --expand` on the output shows the payload rooted under `Library/Application Support/midi-pedald`.
+- Installing on a clean user account produces a running agent (`launchctl print gui/$(id -u)/pro.kyxap.midi-pedald`).
 - Re-installing over an existing install leaves `config.yaml` byte-identical.
 
 ---
@@ -548,7 +549,7 @@ Surface, protocol MIDI, Input Device = IAC Driver Bus 1, **Hide MIDI Input Devic
 do not leak into the audio path and get recorded into clips, then Edit Control Mappings → learn
 three rows); creating IAC Driver Bus 1 in Audio MIDI Setup; and a note that BPM is log-only in
 Free and why. `uninstall.sh` becomes `launchctl bootout` + remove the plist + remove
-`~/Library/Application Support/pedald/`, prompting before touching logs and config.
+`~/Library/Application Support/midi-pedald/`, prompting before touching logs and config.
 
 **Test scenarios:** Test expectation: none — documentation and a removal script with no logic
 beyond three paths.

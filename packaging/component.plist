@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- PyInstaller bundles a Python.framework whose id is org.python.python - the
+     same id as a system / Homebrew Python. Without this, pkgbuild marks the
+     framework relocatable and version-checked, so the installer can retarget
+     our copy onto an unrelated Python or skip it when a newer one exists.
+     Pin it: not relocatable, not version-checked, fixed path under our bin/. -->
+<plist version="1.0">
+<array>
+	<dict>
+		<key>BundleIsRelocatable</key>
+		<false/>
+		<key>BundleIsVersionChecked</key>
+		<false/>
+		<key>BundleOverwriteAction</key>
+		<string>upgrade</string>
+		<key>RootRelativeBundlePath</key>
+		<string>_internal/Python.framework</string>
+	</dict>
+</array>
+</plist>

@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from midiobs.obsctl import ObsController  # noqa: E402
+from midi_pedald.obs_sink import ObsController  # noqa: E402
 from tests.fakes import Clock, FakeReqClient  # noqa: E402
 
 CFG = types.SimpleNamespace(host="localhost", port=4455, password="")
@@ -108,6 +108,77 @@ def test_noop_action_does_nothing():
     oc, cl, _ = controller()
     oc.dispatch("noop")
     assert cl.calls == []
+
+
+def test_dispatch_ignores_unexpected_kwargs():
+    oc, cl, _ = controller(active=False)
+    oc.dispatch("start_record", cc=[[22, 127]], gap_ms=50)  # params meant for another sink
+    assert cl.calls == ["start_record"]
+
+
+def _with_obs_ws_file(payload):
+    """Point obs_sink at a temp obs-websocket config.json; returns a restore fn."""
+    import json
+    import tempfile
+
+    from midi_pedald import obs_sink
+
+    d = tempfile.mkdtemp()
+    p = Path(d) / "config.json"
+    p.write_text(json.dumps(payload))
+    old = obs_sink._OBS_WS_CONFIG
+    obs_sink._OBS_WS_CONFIG = p
+
+    def restore():
+        obs_sink._OBS_WS_CONFIG = old
+        p.unlink()
+        Path(d).rmdir()
+
+    return restore
+
+
+def test_conn_autodetected_from_obs_websocket_config():
+    from midi_pedald import obs_sink
+    from midi_pedald.config import ObsConfig
+
+    restore = _with_obs_ws_file(
+        {"server_port": 4499, "server_password": "sekret", "auth_required": True}
+    )
+    try:
+        assert obs_sink._resolve_conn(ObsConfig()) == ("localhost", 4499, "sekret")
+        # an explicit daemon-config value wins over the detected one
+        assert obs_sink._resolve_conn(ObsConfig(port=9999, password="mine")) == (
+            "localhost",
+            9999,
+            "mine",
+        )
+    finally:
+        restore()
+
+
+def test_conn_ignores_password_when_obs_auth_disabled():
+    from midi_pedald import obs_sink
+    from midi_pedald.config import ObsConfig
+
+    restore = _with_obs_ws_file(
+        {"server_port": 4499, "server_password": "sekret", "auth_required": False}
+    )
+    try:
+        assert obs_sink._resolve_conn(ObsConfig()) == ("localhost", 4499, "")
+    finally:
+        restore()
+
+
+def test_conn_falls_back_to_defaults_without_obs_config():
+    from midi_pedald import obs_sink
+    from midi_pedald.config import ObsConfig
+
+    old = obs_sink._OBS_WS_CONFIG
+    obs_sink._OBS_WS_CONFIG = Path("/nonexistent/obs-websocket/config.json")
+    try:
+        assert obs_sink._resolve_conn(ObsConfig()) == ("localhost", 4455, "")
+    finally:
+        obs_sink._OBS_WS_CONFIG = old
 
 
 if __name__ == "__main__":

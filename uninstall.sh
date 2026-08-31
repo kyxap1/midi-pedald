@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
-# Unload and remove the launchd agent. Leaves venv, config and logs alone.
+# Remove everything the .pkg installed except the config at ~/.config/midi-pedald/.
 set -euo pipefail
 
-LABEL="com.rc5.midiobs"
+LABEL="pro.kyxap.midi-pedald"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+SUPPORT="${HOME:?}/Library/Application Support/midi-pedald"
+CONFDIR="${HOME:?}/.config/midi-pedald"
+LOGDIR="${HOME:?}/Library/Logs/midi-pedald"
 
-# 'unload' fails if it was never loaded; that is fine.
-launchctl unload "$PLIST" 2>/dev/null || true
+if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)/${LABEL}"
+fi
 rm -f "$PLIST"
-echo ">> removed $PLIST"
-echo ">> venv / config / logs kept; delete the project directory to remove them"
+echo ">> removed agent and $PLIST"
+
+rm -rf "${SUPPORT:?}" "${LOGDIR:?}"
+echo ">> removed $SUPPORT and $LOGDIR"
+
+# currentUserHome receipts live under $HOME, not /var/db/receipts.
+if pkgutil --volume "$HOME" --pkg-info "$LABEL" >/dev/null 2>&1; then
+    pkgutil --volume "$HOME" --forget "$LABEL"
+fi
+
+echo ">> kept config at $CONFDIR"

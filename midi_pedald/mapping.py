@@ -5,23 +5,13 @@ Deliberately free of third-party imports so it can be unit-tested with plain
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Dropped by the daemon before this module ever sees them; listed here only so
 # the daemon and the monitor agree on what "realtime spam" means.
 REALTIME_DROP = ("clock", "active_sensing")
 
 EVENTS = ("start", "stop", "continue", "program_change", "control_change")
-ACTIONS = (
-    "start_record",
-    "stop_record",
-    "toggle_record",
-    "split_record_file",
-    "save_replay_buffer",
-    "start_replay_buffer",
-    "stop_replay_buffer",
-    "noop",
-)
 
 
 @dataclass(frozen=True)
@@ -66,11 +56,20 @@ def to_event(msg) -> MidiEvent:
 @dataclass
 class Rule:
     event: str
-    action: str
+    action: str  # "sink.method" — validated at config load
     debounce_ms: int = 300
     number: int | None = None  # exact program (PC) or controller (CC) number
     number_range: tuple[int, int] | None = None  # inclusive PC range
     value_range: tuple[int, int] | None = None  # inclusive CC value range
+    params: dict = field(default_factory=dict)  # kwargs passed to the sink method
+
+    @property
+    def sink(self) -> str:
+        return self.action.split(".", 1)[0]
+
+    @property
+    def method(self) -> str:
+        return self.action.split(".", 1)[1]
 
     def matches(self, ev: MidiEvent) -> bool:
         if ev.kind != self.event:
@@ -99,25 +98,29 @@ def _in_selection(actual, exact, rng) -> bool:
 
 @dataclass
 class Decision:
-    action: str | None
-    rule_index: int | None
+    sink: str
+    method: str
+    params: dict
+    rule_index: int
     reason: str
 
 
 class RuleTable:
-    """First matching rule wins. Debounce is tracked per rule index."""
+    """Every matching rule fires, in file order. Debounce is tracked per rule
+    index, so one rule firing never debounces another."""
 
     def __init__(self, rules: list[Rule]):
         self.rules = rules
         self._last_fire: dict[int, float] = {}
 
-    def decide(self, ev: MidiEvent, now: float) -> Decision:
+    def decide_all(self, ev: MidiEvent, now: float) -> list[Decision]:
+        out: list[Decision] = []
         for i, rule in enumerate(self.rules):
             if not rule.matches(ev):
                 continue
             last = self._last_fire.get(i)
             if last is not None and (now - last) * 1000.0 < rule.debounce_ms:
-                return Decision(None, i, f"rule {i} debounced ({rule.debounce_ms}ms)")
+                continue
             self._last_fire[i] = now
-            return Decision(rule.action, i, f"rule {i} matched")
-        return Decision(None, None, "no rule matched")
+            out.append(Decision(rule.sink, rule.method, dict(rule.params), i, f"rule {i} matched"))
+        return out

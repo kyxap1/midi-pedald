@@ -1,0 +1,4 @@
+# Build-time only. Pinned: packaging/component.plist references the frozen
+# layout's `_internal/Python.framework` path, which is a PyInstaller-version
+# detail - a silent layout change would re-enable framework relocation.
+pyinstaller==6.22.2
