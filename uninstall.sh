@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Remove the launchd agent and the daemon bundle. Prompts before deleting the
-# config and logs.
+# Remove everything the .pkg installed except the config at ~/.config/midi-pedald/.
 set -euo pipefail
 
 LABEL="pro.kyxap.midi-pedald"
@@ -15,15 +14,12 @@ fi
 rm -f "$PLIST"
 echo ">> removed agent and $PLIST"
 
-if [ -d "$SUPPORT" ]; then
-    rm -rf "${SUPPORT:?}"
-    echo ">> removed $SUPPORT"
+rm -rf "${SUPPORT:?}" "${LOGDIR:?}"
+echo ">> removed $SUPPORT and $LOGDIR"
+
+# currentUserHome receipts live under $HOME, not /var/db/receipts.
+if pkgutil --volume "$HOME" --pkg-info "$LABEL" >/dev/null 2>&1; then
+    pkgutil --volume "$HOME" --forget "$LABEL"
 fi
 
-read -r -p ">> also delete config and logs ($CONFDIR, $LOGDIR)? [y/N] " ans
-if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-    rm -rf "${CONFDIR:?}" "${LOGDIR:?}"
-    echo ">> removed config and logs"
-else
-    echo ">> kept $CONFDIR and $LOGDIR"
-fi
+echo ">> kept config at $CONFDIR"

@@ -19,8 +19,9 @@ TARGET_UID=$(stat -f %u "$HOME")
 mkdir -p "$CONFDIR" "$LOGDIR" "$AGENTS"
 
 # An upgrade must never clobber a tuned config.
+# PyInstaller onedir puts bundled data files under _internal/, not the bundle root.
 if [ ! -f "$CONFIG" ]; then
-    cp "$BIN/config.example.yaml" "$CONFIG"
+    cp "$BIN/_internal/config.example.yaml" "$CONFIG"
 fi
 
 cat > "$PLIST" <<PLIST
