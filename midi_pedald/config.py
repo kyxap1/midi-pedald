@@ -2,7 +2,7 @@
 rule-building helpers stay importable without PyYAML."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .mapping import EVENTS, Rule
@@ -24,6 +24,14 @@ class ObsConfig:
 @dataclass
 class MidiOutConfig:
     port_substring: str
+
+
+@dataclass
+class BpmConfig:
+    enabled: bool = True
+    window_ticks: int = 96
+    tolerance: float = 1.5
+    confirm_windows: int = 2
 
 
 # Sink type -> the method names a rule may name as "<sink>.<method>".
@@ -52,6 +60,7 @@ class Config:
     sinks: dict[str, object]
     log: LogConfig
     rules: list[Rule]
+    bpm: BpmConfig = field(default_factory=BpmConfig)
 
 
 def _pair(value, where: str) -> tuple[int, int] | None:
@@ -180,4 +189,12 @@ def load(path: str | Path) -> Config:
         raise ConfigError("rules must be a non-empty list")
     rules = [rule_from_dict(d, i, set(sinks)) for i, d in enumerate(rules_raw)]
 
-    return Config(midi_port_substring=substring, sinks=sinks, log=log, rules=rules)
+    bp = data.get("bpm") or {}
+    bpm = BpmConfig(
+        enabled=bool(bp.get("enabled", True)),
+        window_ticks=int(bp.get("window_ticks", 96)),
+        tolerance=float(bp.get("tolerance", 1.5)),
+        confirm_windows=int(bp.get("confirm_windows", 2)),
+    )
+
+    return Config(midi_port_substring=substring, sinks=sinks, log=log, rules=rules, bpm=bpm)

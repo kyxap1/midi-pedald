@@ -9,6 +9,7 @@ import time
 
 import mido
 
+from .bpm import BpmMeter
 from .config import Config
 from .mapping import RuleTable, to_event
 from .midi_sink import MidiSink
@@ -17,7 +18,6 @@ from .obs_sink import ObsController
 log = logging.getLogger("midi_pedald")
 
 _PORT_POLL_S = 2.0
-_DROP_TYPES = {"clock", "active_sensing"}
 
 
 def find_input(substring: str) -> str | None:
@@ -56,15 +56,29 @@ class Daemon:
         self.cfg = cfg
         self.rules = RuleTable(cfg.rules)
         self.sinks = sinks if sinks is not None else _build_sinks(cfg)
+        self._bpm = (
+            BpmMeter(cfg.bpm.window_ticks, cfg.bpm.tolerance, cfg.bpm.confirm_windows)
+            if cfg.bpm.enabled
+            else None
+        )
         self._q: queue.Queue = queue.Queue(maxsize=1000)
         self._port = None
         self._next_poll = 0.0
         self._stop = False
 
     def _on_midi(self, msg) -> None:
-        # MIDI Clock / Active Sensing are dropped here, before logging or debounce.
-        if msg.type in _DROP_TYPES:
+        # MIDI Clock feeds the BPM meter here, then is dropped before the queue -
+        # the "clock never reaches any logic" guarantee is preserved.
+        if msg.type == "clock":
+            if self._bpm is not None:
+                bpm = self._bpm.tick()
+                if bpm is not None:
+                    log.info("BPM ~%.1f", bpm)
             return
+        if msg.type == "active_sensing":
+            return
+        if msg.type == "start" and self._bpm is not None:
+            self._bpm.reset()
         try:
             self._q.put_nowait(msg)
         except queue.Full:

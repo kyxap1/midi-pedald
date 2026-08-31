@@ -7,7 +7,7 @@ import midi_pedald.daemon as daemon  # noqa: E402
 from midi_pedald.config import Config, LogConfig, ObsConfig  # noqa: E402
 from midi_pedald.daemon import Daemon, _build_sinks  # noqa: E402
 from midi_pedald.mapping import Rule  # noqa: E402
-from tests.fakes import FakeMido, FakeSink, start  # noqa: E402
+from tests.fakes import FakeMido, FakeSink, clock, start  # noqa: E402
 
 # These tests never touch a real MIDI backend.
 daemon.mido = FakeMido()
@@ -49,6 +49,30 @@ def test_handle_dispatches_to_the_obs_sink():
 
 def test_handle_with_empty_registry_drops_without_crashing():
     Daemon(cfg(), sinks={})._handle(start())  # must not raise
+
+
+def test_clock_feeds_the_meter_and_never_reaches_the_queue():
+    dae = Daemon(cfg(), sinks={"obs": FakeSink()})
+    assert dae._bpm is not None
+    dae._on_midi(clock())
+    assert dae._q.qsize() == 0
+
+
+def test_clock_with_meter_disabled_touches_no_bpm_state():
+    c = cfg()
+    c.bpm.enabled = False
+    dae = Daemon(c, sinks={"obs": FakeSink()})
+    assert dae._bpm is None
+    dae._on_midi(clock())  # must not raise
+    assert dae._q.qsize() == 0
+
+
+def test_start_is_queued_and_resets_the_meter_window():
+    dae = Daemon(cfg(), sinks={"obs": FakeSink()})
+    dae._bpm._t0 = 123.0
+    dae._on_midi(start())
+    assert dae._q.qsize() == 1
+    assert dae._bpm._t0 is None
 
 
 def test_run_pumps_ensure_connected_on_every_sink_then_stops_cleanly():

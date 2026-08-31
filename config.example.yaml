@@ -17,6 +17,12 @@ sinks:
     port_substring: "IAC"   # the output device CC sequences are sent to (create IAC Driver Bus 1
                             # in Audio MIDI Setup); learn these CCs on the Waveform side
 
+bpm:
+  enabled: true
+  window_ticks: 96       # 96 = one 4/4 bar
+  tolerance: 1.5         # BPM dead-band: the latch ignores drift smaller than this
+  confirm_windows: 2     # a new tempo must hold this many windows before the latch moves
+
 logging:
   level: INFO           # DEBUG logs every MIDI event and the rule decision
   file: "~/Library/Logs/midi-pedald/midi-pedald.log"
