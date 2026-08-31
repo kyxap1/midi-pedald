@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# Unload and remove the launchd agent. Leaves venv, config and logs alone.
+# Unload and remove the launchd agent. Leaves config and logs alone.
 set -euo pipefail
 
-LABEL="com.rc5.midiobs"
+LABEL="pro.kyxap.pedald"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 
-# 'unload' fails if it was never loaded; that is fine.
-launchctl unload "$PLIST" 2>/dev/null || true
+launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
 rm -f "$PLIST"
 echo ">> removed $PLIST"
-echo ">> venv / config / logs kept; delete the project directory to remove them"
+echo ">> config / logs kept; delete ~/Library/Application Support/pedald/ to remove them"

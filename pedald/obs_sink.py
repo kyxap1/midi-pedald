@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 
-log = logging.getLogger("midiobs")
+log = logging.getLogger("pedald")
 
 _BACKOFF_START = 1.0
 _BACKOFF_MAX = 30.0

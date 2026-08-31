@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from midiobs.mapping import Rule, RuleTable, to_event  # noqa: E402
+from pedald.mapping import Rule, RuleTable, to_event  # noqa: E402
 from tests.fakes import cc, clock, pc, start, stop  # noqa: E402
 
 

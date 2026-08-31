@@ -19,10 +19,13 @@ class ObsConfig:
     password: str = ""
 
 
+_DEFAULT_LOG_FILE = "~/Library/Logs/pedald/pedald.log"
+
+
 @dataclass
 class LogConfig:
     level: str = "INFO"
-    file: str | None = None
+    file: str | None = _DEFAULT_LOG_FILE
     max_bytes: int = 1_048_576
     backup_count: int = 3
 
@@ -103,7 +106,7 @@ def load(path: str | Path) -> Config:
     lg = data.get("logging") or {}
     log = LogConfig(
         level=str(lg.get("level", "INFO")).upper(),
-        file=lg.get("file"),
+        file=lg.get("file", _DEFAULT_LOG_FILE),
         max_bytes=int(lg.get("max_bytes", 1_048_576)),
         backup_count=int(lg.get("backup_count", 3)),
     )

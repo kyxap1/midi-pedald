@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from midiobs.config import ConfigError, rule_from_dict  # noqa: E402
+from pedald.config import ConfigError, rule_from_dict  # noqa: E402
 
 
 def expect_error(d, needle):

@@ -1,4 +1,4 @@
-# midiobs
+# pedald
 
 A macOS daemon that listens on a MIDI input and drives OBS Studio recording over
 [obs-websocket](https://github.com/obsproject/obs-websocket). Built for a Boss
@@ -21,8 +21,8 @@ any logic runs.
 ## Install
 
 ```sh
-git clone <this repo> midi-obs-recorder
-cd midi-obs-recorder
+git clone <this repo> midi-pedald
+cd midi-pedald
 ./install.sh
 ```
 
@@ -34,20 +34,20 @@ Then edit `config.yaml` (at minimum: `midi.port_substring` and `obs.password`)
 and reload:
 
 ```sh
-launchctl unload ~/Library/LaunchAgents/com.rc5.midiobs.plist
-launchctl load  ~/Library/LaunchAgents/com.rc5.midiobs.plist
+launchctl unload ~/Library/LaunchAgents/pro.kyxap.pedald.plist
+launchctl load  ~/Library/LaunchAgents/pro.kyxap.pedald.plist
 ```
 
 To run in the foreground instead (for testing):
 
 ```sh
-.venv/bin/python -m midiobs --config config.yaml
+.venv/bin/python -m pedald --config config.yaml
 ```
 
 ## Finding your MIDI port name
 
 ```sh
-.venv/bin/python -m midiobs --monitor
+.venv/bin/python -m pedald --monitor
 ```
 
 This prints every available MIDI input, then every incoming message on the first
@@ -86,7 +86,7 @@ obs:
 
 logging:
   level: INFO                     # DEBUG = log every MIDI event and rule decision
-  file: "~/Library/Logs/midiobs/midiobs.log"
+  file: "~/Library/Logs/pedald/pedald.log"
   max_bytes: 1048576              # rotate at this size
   backup_count: 3
 
@@ -131,14 +131,14 @@ pedal press or a repeated MIDI message never raises.
 
 ## Autostart
 
-Managed by a launchd user agent (`com.rc5.midiobs`, `RunAtLoad` + `KeepAlive`).
+Managed by a launchd user agent (`pro.kyxap.pedald`, `RunAtLoad` + `KeepAlive`).
 
 - **Install / update:** `./install.sh`
 - **Remove:** `./uninstall.sh` (leaves `.venv/`, `config.yaml` and logs in place)
-- **Restart:** `launchctl kickstart -k gui/$(id -u)/com.rc5.midiobs`
-- **Is it running:** `launchctl list | grep com.rc5.midiobs`
+- **Restart:** `launchctl kickstart -k gui/$(id -u)/pro.kyxap.pedald`
+- **Is it running:** `launchctl list | grep pro.kyxap.pedald`
 
-The plist is generated from `launchd/com.rc5.midiobs.plist.template`;
+The plist is generated from `packaging/pedald.plist`;
 `install.sh` substitutes the venv Python path, project dir, config path and log
 dir. Don't hand-edit the installed plist — edit the template and re-run
 `install.sh`.
@@ -146,8 +146,8 @@ dir. Don't hand-edit the installed plist — edit the template and re-run
 ## Logs
 
 - stdout (visible in the foreground; captured to
-  `~/Library/Logs/midiobs/launchd.out.log` under launchd)
-- `~/Library/Logs/midiobs/midiobs.log`, rotated by size
+  `~/Library/Logs/pedald/launchd.out.log` under launchd)
+- `~/Library/Logs/pedald/pedald.log`, rotated by size
 
 `INFO` covers recording state changes and connection events. `DEBUG` adds every
 accepted MIDI event and the rule decision (which rule fired, or why none did).
@@ -172,7 +172,7 @@ accepted MIDI event and the rule decision (which rule fired, or why none did).
    Your OBS is older than 30.2. Update OBS, or map that pedal to
    `stop_record` + `start_record` on separate presses instead.
 6. **Daemon keeps restarting under launchd.** Check
-   `~/Library/Logs/midiobs/launchd.err.log` — usually a bad config path or a
+   `~/Library/Logs/pedald/launchd.err.log` — usually a bad config path or a
    venv that didn't build. Re-run `./install.sh`.
 
 ## Split file support
