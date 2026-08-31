@@ -3,3 +3,7 @@ config.yaml
 __pycache__/
 *.pyc
 .pytest_cache/
+build/
+dist/
+*.pkg
+*.spec.bak

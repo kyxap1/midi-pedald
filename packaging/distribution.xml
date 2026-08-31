@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- enable_currentUserHome installs into $HOME without root and without
+     console-user detection (satisfies R6). Reported flaky on some macOS
+     versions; postinstall re-derives the target user defensively.
+     https://developer.apple.com/forums/thread/664354 -->
+<installer-gui-script minSpecVersion="2">
+    <title>midi-pedald</title>
+    <domains enable_currentUserHome="true" enable_localSystem="false" enable_anywhere="false"/>
+    <options customize="never" require-scripts="true" hostArchitectures="arm64" rootVolumeOnly="false"/>
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+    <choice id="default" title="midi-pedald">
+        <pkg-ref id="pro.kyxap.midi-pedald"/>
+    </choice>
+    <pkg-ref id="pro.kyxap.midi-pedald" version="0" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>

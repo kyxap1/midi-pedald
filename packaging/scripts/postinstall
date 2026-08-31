@@ -1,0 +1,55 @@
+#!/bin/bash
+# Runs after the payload lands in ~/Library/Application Support/midi-pedald/bin/.
+# For a currentUserHome pkg the installer sets $HOME to the target user's home
+# but may still run this as root, so derive the uid from the home dir owner
+# rather than trusting `id -u`.
+set -e
+
+LABEL="pro.kyxap.midi-pedald"
+SUPPORT="$HOME/Library/Application Support/midi-pedald"
+BIN="$SUPPORT/bin"
+CONFIG="$SUPPORT/config.yaml"
+LOGDIR="$HOME/Library/Logs/midi-pedald"
+AGENTS="$HOME/Library/LaunchAgents"
+PLIST="$AGENTS/$LABEL.plist"
+
+TARGET_UID=$(stat -f %u "$HOME")
+
+mkdir -p "$LOGDIR" "$AGENTS"
+
+# An upgrade must never clobber a tuned config.
+if [ ! -f "$CONFIG" ]; then
+    cp "$BIN/config.example.yaml" "$CONFIG"
+fi
+
+cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>$LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$BIN/midi-pedald</string>
+        <string>--config</string>
+        <string>$CONFIG</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>ThrottleInterval</key><integer>5</integer>
+    <key>StandardOutPath</key><string>$LOGDIR/launchd.out.log</string>
+    <key>StandardErrorPath</key><string>$LOGDIR/launchd.err.log</string>
+    <key>EnvironmentVariables</key>
+    <dict><key>PYTHONUNBUFFERED</key><string>1</string></dict>
+</dict>
+</plist>
+PLIST
+
+# Make sure everything is owned by the user, not root, if the installer ran us elevated.
+chown -R "$TARGET_UID" "$SUPPORT" "$LOGDIR" "$PLIST" 2>/dev/null || true
+xattr -dr com.apple.quarantine "$BIN" 2>/dev/null || true
+
+launchctl bootout "gui/$TARGET_UID/$LABEL" 2>/dev/null || true
+launchctl bootstrap "gui/$TARGET_UID" "$PLIST"
+
+exit 0
