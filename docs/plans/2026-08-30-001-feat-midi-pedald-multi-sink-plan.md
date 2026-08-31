@@ -3,7 +3,7 @@ title: "feat: midi-pedald — multi-sink MIDI pedal daemon with self-contained .
 date: 2026-08-30
 type: feat
 depth: deep
-status: active
+status: completed
 ---
 
 # feat: midi-pedald — multi-sink MIDI pedal daemon with self-contained .pkg
