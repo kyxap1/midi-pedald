@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 
-log = logging.getLogger("pedald")
+log = logging.getLogger("midi_pedald")
 
 _BACKOFF_START = 1.0
 _BACKOFF_MAX = 30.0
@@ -93,32 +93,34 @@ class ObsController:
         self._next_attempt = self._now() + self._backoff
         self._backoff = min(self._backoff * 2, _BACKOFF_MAX)
 
-    def dispatch(self, action: str) -> None:
-        if action == "noop":
+    def dispatch(self, method: str, **params) -> None:
+        # OBS record commands take no parameters; params is accepted for a
+        # uniform sink contract and ignored here.
+        if method == "noop":
             return
         if not self.ensure_connected():
-            log.info("skipping %s: OBS not connected", action)
+            log.info("skipping %s: OBS not connected", method)
             return
-        cap = _GATED.get(action)
+        cap = _GATED.get(method)
         if cap and cap not in self._available:
             log.error(
                 "cannot %s: obs-websocket has no %s request "
                 "(SplitRecordFile requires OBS Studio 30.2+)",
-                action,
+                method,
                 cap,
             )
             return
-        handler = getattr(self, f"_do_{action}", None)
+        handler = getattr(self, f"_do_{method}", None)
         if handler is None:
-            log.error("unknown action: %s", action)
+            log.error("unknown action: %s", method)
             return
         try:
             handler()
         except Exception as e:
             if _is_request_error(e):
-                log.error("%s failed: %s", action, e)  # bad state, not a dead socket
+                log.error("%s failed: %s", method, e)  # bad state, not a dead socket
             else:
-                self._drop(f"{action}: {e}")
+                self._drop(f"{method}: {e}")
 
     def _record_active(self) -> bool:
         return bool(self._client.get_record_status().output_active)

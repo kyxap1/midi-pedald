@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pedald.obs_sink import ObsController  # noqa: E402
+from midi_pedald.obs_sink import ObsController  # noqa: E402
 from tests.fakes import Clock, FakeReqClient  # noqa: E402
 
 CFG = types.SimpleNamespace(host="localhost", port=4455, password="")

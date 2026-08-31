@@ -1,9 +1,9 @@
-# pedald configuration. Re-point a footswitch by editing rules here, not code.
+# midi-pedald configuration. Re-point a footswitch by editing rules here, not code.
 
 midi:
   # Substring match against the MIDI input name (case-insensitive). The port
   # can be renamed by macOS between reboots, so match on something stable.
-  # Find yours with:  python -m pedald --monitor
+  # Find yours with:  python -m midi_pedald --monitor
   port_substring: "Scarlett"
 
 obs:
@@ -13,7 +13,7 @@ obs:
 
 logging:
   level: INFO           # DEBUG logs every MIDI event and the rule decision
-  file: "~/Library/Logs/pedald/pedald.log"
+  file: "~/Library/Logs/midi-pedald/midi-pedald.log"
   max_bytes: 1048576    # rotate at 1 MiB
   backup_count: 3
 

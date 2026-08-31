@@ -13,7 +13,7 @@ from .config import Config
 from .mapping import RuleTable, to_event
 from .obs_sink import ObsController
 
-log = logging.getLogger("pedald")
+log = logging.getLogger("midi_pedald")
 
 _PORT_POLL_S = 2.0
 _DROP_TYPES = {"clock", "active_sensing"}
@@ -87,7 +87,7 @@ class Daemon:
         signal.signal(signal.SIGTERM, self._on_signal)
         signal.signal(signal.SIGINT, self._on_signal)
         log.info(
-            "pedald starting (midi~=%r, obs=%s:%d)",
+            "midi-pedald starting (midi~=%r, obs=%s:%d)",
             self.cfg.midi_port_substring,
             self.cfg.obs.host,
             self.cfg.obs.port,
@@ -106,7 +106,7 @@ class Daemon:
                 log.exception("main loop error; continuing")
                 time.sleep(0.5)
         self._close_port()
-        log.info("pedald stopped")
+        log.info("midi-pedald stopped")
 
     def _on_signal(self, *_a) -> None:
         self._stop = True

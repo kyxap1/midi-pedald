@@ -19,7 +19,7 @@ class ObsConfig:
     password: str = ""
 
 
-_DEFAULT_LOG_FILE = "~/Library/Logs/pedald/pedald.log"
+_DEFAULT_LOG_FILE = "~/Library/Logs/midi-pedald/midi-pedald.log"
 
 
 @dataclass

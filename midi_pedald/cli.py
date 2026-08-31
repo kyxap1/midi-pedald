@@ -10,7 +10,7 @@ from pathlib import Path
 from . import __version__
 
 _FMT = "%(asctime)s %(levelname)-7s %(message)s"
-_DEFAULT_CONFIG = "~/Library/Application Support/pedald/config.yaml"
+_DEFAULT_CONFIG = "~/Library/Application Support/midi-pedald/config.yaml"
 
 
 def _resolve_config(arg: str | None) -> Path:
@@ -20,7 +20,7 @@ def _resolve_config(arg: str | None) -> Path:
 
 
 def _setup_logging(cfg) -> None:
-    root = logging.getLogger("pedald")
+    root = logging.getLogger("midi_pedald")
     root.setLevel(cfg.level)
     root.propagate = False
     fmt = logging.Formatter(_FMT)
@@ -88,14 +88,14 @@ def _monitor(port_sub: str | None, show_clock: bool) -> int:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="pedald", description="MIDI pedal -> multi-sink daemon")
+    p = argparse.ArgumentParser(prog="midi-pedald", description="MIDI pedal -> multi-sink daemon")
     p.add_argument("--monitor", action="store_true", help="print incoming MIDI, then exit")
     p.add_argument("--port", help="MIDI input name substring (monitor mode)")
     p.add_argument(
         "--show-clock", action="store_true", help="do not filter MIDI Clock / Active Sensing"
     )
     p.add_argument("--config", default=None, help="YAML config path (daemon mode)")
-    p.add_argument("--version", action="version", version=f"pedald {__version__}")
+    p.add_argument("--version", action="version", version=f"midi-pedald {__version__}")
     args = p.parse_args(argv)
 
     if args.monitor:

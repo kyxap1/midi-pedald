@@ -3,13 +3,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pedald.cli import _resolve_config  # noqa: E402
+from midi_pedald.cli import _resolve_config  # noqa: E402
 
 
 def test_config_default_is_app_support_absolute():
     p = _resolve_config(None)
     assert p.is_absolute()
-    assert p == Path("~/Library/Application Support/pedald/config.yaml").expanduser()
+    assert p == Path("~/Library/Application Support/midi-pedald/config.yaml").expanduser()
 
 
 def test_relative_config_is_honoured_verbatim():
