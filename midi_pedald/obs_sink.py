@@ -34,6 +34,15 @@ _GATED = {"split_record_file": "SplitRecordFile"}
 def _default_factory(cfg):
     import obsws_python
 
+    # obsws-python logs a full connect traceback at ERROR and the password at
+    # INFO on its own logger; ensure_connected already logs a one-line summary.
+    # A NullHandler stops logging's lastResort from dumping that to stderr
+    # (propagate=False alone does not); WARNING drops the password line.
+    _obsws_log = logging.getLogger("obsws_python")
+    _obsws_log.setLevel(logging.WARNING)
+    if not _obsws_log.handlers:
+        _obsws_log.addHandler(logging.NullHandler())
+
     return obsws_python.ReqClient(
         host=cfg.host, port=cfg.port, password=cfg.password, timeout=3
     )
