@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install deps
-        run: pip install -r requirements.txt pyinstaller pytest
+        run: pip install -r requirements.txt -r packaging/requirements-build.txt pytest
 
       - name: Test
         run: python -m pytest -q

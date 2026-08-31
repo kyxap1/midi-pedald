@@ -212,7 +212,7 @@ from Free. Re-learn the rows.
 ## Build from source
 
 ```sh
-pip install -r requirements.txt pyinstaller
+pip install -r requirements.txt -r packaging/requirements-build.txt
 packaging/build-pkg.sh
 ```
 
