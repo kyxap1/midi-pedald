@@ -5,11 +5,15 @@
 # cannot see mido.backends.rtmidi - it must be named here or the daemon fails
 # silently at port-open time. https://github.com/orgs/mido/discussions/426
 
+import os
+
+_repo_root = os.path.abspath(os.path.join(SPECPATH, ".."))
+
 a = Analysis(
-    ["main.py"],
-    pathex=[".."],
+    [os.path.join(SPECPATH, "main.py")],
+    pathex=[_repo_root],
     binaries=[],
-    datas=[("../config.example.yaml", ".")],
+    datas=[(os.path.join(_repo_root, "config.example.yaml"), ".")],
     hiddenimports=["mido.backends.rtmidi", "rtmidi"],
     hookspath=[],
     hooksconfig={},
