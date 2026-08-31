@@ -10,11 +10,11 @@ from pathlib import Path
 from . import __version__
 
 _FMT = "%(asctime)s %(levelname)-7s %(message)s"
-_DEFAULT_CONFIG = "~/Library/Application Support/midi-pedald/config.yaml"
+_DEFAULT_CONFIG = "~/.config/midi-pedald/config.yaml"
 
 
 def _resolve_config(arg: str | None) -> Path:
-    """--config default lands in Application Support; an explicit path (relative
+    """--config default lands in ~/.config; an explicit path (relative
     included) is used verbatim."""
     return Path(arg or _DEFAULT_CONFIG).expanduser()
 

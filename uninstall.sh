@@ -5,22 +5,25 @@ set -euo pipefail
 
 LABEL="pro.kyxap.midi-pedald"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
-SUPPORT="$HOME/Library/Application Support/midi-pedald"
-LOGDIR="$HOME/Library/Logs/midi-pedald"
+SUPPORT="${HOME:?}/Library/Application Support/midi-pedald"
+CONFDIR="${HOME:?}/.config/midi-pedald"
+LOGDIR="${HOME:?}/Library/Logs/midi-pedald"
 
-launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)/${LABEL}"
+fi
 rm -f "$PLIST"
 echo ">> removed agent and $PLIST"
 
-if [ -d "$SUPPORT/bin" ]; then
-    rm -rf "$SUPPORT/bin"
-    echo ">> removed $SUPPORT/bin"
+if [ -d "$SUPPORT" ]; then
+    rm -rf "${SUPPORT:?}"
+    echo ">> removed $SUPPORT"
 fi
 
-read -r -p ">> also delete config and logs ($SUPPORT, $LOGDIR)? [y/N] " ans
+read -r -p ">> also delete config and logs ($CONFDIR, $LOGDIR)? [y/N] " ans
 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-    rm -rf "$SUPPORT" "$LOGDIR"
+    rm -rf "${CONFDIR:?}" "${LOGDIR:?}"
     echo ">> removed config and logs"
 else
-    echo ">> kept $SUPPORT and $LOGDIR"
+    echo ">> kept $CONFDIR and $LOGDIR"
 fi

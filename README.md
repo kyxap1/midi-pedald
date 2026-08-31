@@ -38,8 +38,8 @@ blocks the first open. Either:
 The installer:
 
 - puts the daemon at `~/Library/Application Support/midi-pedald/bin/`
-- writes `~/Library/Application Support/midi-pedald/config.yaml` from the
-  bundled example **only if you don't already have one** (upgrades keep yours)
+- writes `~/.config/midi-pedald/config.yaml` from the bundled example **only if
+  you don't already have one** (upgrades keep yours)
 - loads a launchd agent (`pro.kyxap.midi-pedald`, `RunAtLoad` + `KeepAlive`)
 
 Then edit the config (at minimum `midi.port_substring`, and `sinks.obs.password`
@@ -54,7 +54,7 @@ launchctl kickstart -k gui/$(id -u)/pro.kyxap.midi-pedald
 | | |
 |---|---|
 | Bundle | `~/Library/Application Support/midi-pedald/bin/` |
-| Config | `~/Library/Application Support/midi-pedald/config.yaml` |
+| Config | `~/.config/midi-pedald/config.yaml` |
 | Logs | `~/Library/Logs/midi-pedald/` |
 | Agent | `~/Library/LaunchAgents/pro.kyxap.midi-pedald.plist` |
 
@@ -90,8 +90,8 @@ Matching is case-insensitive and re-scanned every 2 seconds.
 
 ## Config
 
-YAML at `~/Library/Application Support/midi-pedald/config.yaml`. See
-`config.example.yaml` for a full working file.
+YAML at `~/.config/midi-pedald/config.yaml`. See `config.example.yaml` for a
+full working file.
 
 ```yaml
 midi:

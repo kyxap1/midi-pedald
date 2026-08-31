@@ -8,14 +8,15 @@ set -e
 LABEL="pro.kyxap.midi-pedald"
 SUPPORT="$HOME/Library/Application Support/midi-pedald"
 BIN="$SUPPORT/bin"
-CONFIG="$SUPPORT/config.yaml"
+CONFDIR="$HOME/.config/midi-pedald"
+CONFIG="$CONFDIR/config.yaml"
 LOGDIR="$HOME/Library/Logs/midi-pedald"
 AGENTS="$HOME/Library/LaunchAgents"
 PLIST="$AGENTS/$LABEL.plist"
 
 TARGET_UID=$(stat -f %u "$HOME")
 
-mkdir -p "$LOGDIR" "$AGENTS"
+mkdir -p "$CONFDIR" "$LOGDIR" "$AGENTS"
 
 # An upgrade must never clobber a tuned config.
 if [ ! -f "$CONFIG" ]; then
@@ -46,10 +47,15 @@ cat > "$PLIST" <<PLIST
 PLIST
 
 # Make sure everything is owned by the user, not root, if the installer ran us elevated.
-chown -R "$TARGET_UID" "$SUPPORT" "$LOGDIR" "$PLIST" 2>/dev/null || true
-xattr -dr com.apple.quarantine "$BIN" 2>/dev/null || true
+chown -R "$TARGET_UID" "$SUPPORT" "$CONFDIR" "$LOGDIR" "$PLIST"
 
-launchctl bootout "gui/$TARGET_UID/$LABEL" 2>/dev/null || true
+# -dr exits 0 whether or not the attribute is present.
+xattr -dr com.apple.quarantine "$BIN"
+
+# bootout only what is actually loaded (a first install has nothing to unload).
+if launchctl print "gui/$TARGET_UID/$LABEL" >/dev/null 2>&1; then
+    launchctl bootout "gui/$TARGET_UID/$LABEL"
+fi
 launchctl bootstrap "gui/$TARGET_UID" "$PLIST"
 
 exit 0
