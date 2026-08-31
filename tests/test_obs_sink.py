@@ -110,6 +110,12 @@ def test_noop_action_does_nothing():
     assert cl.calls == []
 
 
+def test_dispatch_ignores_unexpected_kwargs():
+    oc, cl, _ = controller(active=False)
+    oc.dispatch("start_record", cc=[[22, 127]], gap_ms=50)  # params meant for another sink
+    assert cl.calls == ["start_record"]
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):

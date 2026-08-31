@@ -27,11 +27,32 @@ def find_input(substring: str) -> str | None:
     return None
 
 
+# Sink contract (informal — two implementations, so no ABC; documented here):
+#   ensure_connected(now) -> bool    own backoff/poll; never raises
+#   dispatch(method, **params)       no-op + one log line when disconnected; never raises
+#   connected -> bool                for logging only
+_SINK_FACTORIES = {
+    "obs": lambda cfg: ObsController(cfg.obs),
+}
+
+
+def _build_sinks(cfg: Config, factories: dict | None = None) -> dict[str, object]:
+    """Construct each configured sink. A sink that fails to build is logged and
+    skipped so the others still run."""
+    out: dict[str, object] = {}
+    for name, factory in (factories or _SINK_FACTORIES).items():
+        try:
+            out[name] = factory(cfg)
+        except Exception:
+            log.exception("sink %r failed to initialise; continuing without it", name)
+    return out
+
+
 class Daemon:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, sinks: dict[str, object] | None = None):
         self.cfg = cfg
         self.rules = RuleTable(cfg.rules)
-        self.obs = ObsController(cfg.obs)
+        self.sinks = sinks if sinks is not None else _build_sinks(cfg)
         self._q: queue.Queue = queue.Queue(maxsize=1000)
         self._port = None
         self._next_poll = 0.0
@@ -81,7 +102,11 @@ class Daemon:
             log.debug("MIDI %s -> nothing (%s)", ev, d.reason)
             return
         log.debug("MIDI %s -> %s (%s)", ev, d.action, d.reason)
-        self.obs.dispatch(d.action)
+        sink = self.sinks.get("obs")
+        if sink is None:
+            log.debug("MIDI %s -> %s dropped: no 'obs' sink", ev, d.action)
+            return
+        sink.dispatch(d.action)
 
     def run(self) -> None:
         signal.signal(signal.SIGTERM, self._on_signal)
@@ -96,7 +121,8 @@ class Daemon:
             try:
                 now = time.monotonic()
                 self._ensure_port(now)
-                self.obs.ensure_connected(now)
+                for sink in self.sinks.values():
+                    sink.ensure_connected(now)
                 try:
                     msg = self._q.get(timeout=0.2)
                 except queue.Empty:
