@@ -91,6 +91,24 @@ def test_input_enumeration_error_is_swallowed_not_raised():
         daemon.mido = saved
 
 
+def test_open_input_raising_invalidporterror_does_not_propagate():
+    # InvalidPortError is a ValueError; the daemon must log and retry, not crash.
+    fm = FakeMido(inputs=["Scarlett 18i16 4th Gen"])
+
+    def boom(name, callback=None):
+        raise ValueError("portNumber (1) is invalid")
+
+    fm.open_input = boom
+    saved = daemon.mido
+    daemon.mido = fm
+    try:
+        dae = Daemon(cfg(), sinks={"obs": FakeSink()})
+        dae._ensure_port(0.0)  # must not raise
+        assert dae._port is None
+    finally:
+        daemon.mido = saved
+
+
 def test_run_pumps_ensure_connected_on_every_sink_then_stops_cleanly():
     a = FakeSink()
 

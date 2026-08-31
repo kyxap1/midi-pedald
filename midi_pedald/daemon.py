@@ -110,7 +110,9 @@ class Daemon:
         try:
             self._port = mido.open_input(name, callback=self._on_midi)
             log.info("MIDI input open: %s", name)
-        except (OSError, RuntimeError) as e:
+        except (OSError, RuntimeError, ValueError) as e:
+            # ValueError covers rtmidi's InvalidPortError when the device
+            # vanishes between find_input and open; retried on the next poll.
             log.info("failed to open MIDI input %s: %s", name, e)
 
     def _close_port(self) -> None:

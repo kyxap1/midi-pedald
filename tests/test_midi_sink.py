@@ -56,6 +56,19 @@ def test_port_vanishes_while_held_then_reopens():
     assert s.ensure_connected() is True
 
 
+def test_open_raising_invalidporterror_is_caught_not_propagated(monkeypatch):
+    # rtmidi's InvalidPortError is a ValueError, raised when the device is
+    # unplugged between the match and open.
+    s, be, _ = sink(outputs=["IAC Driver Bus 1"])
+
+    def boom(_name):
+        raise ValueError("bad port")
+
+    monkeypatch.setattr(be, "open_output", boom)
+    assert s.ensure_connected() is False
+    assert not s.connected
+
+
 def test_disconnected_poll_respects_the_2s_window():
     clk = Clock()
     s, be, _ = sink(outputs=[], clock=clk)

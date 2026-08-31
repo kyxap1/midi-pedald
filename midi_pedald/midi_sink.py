@@ -77,7 +77,9 @@ class MidiSink:
             self._port = self._backend().open_output(name)
             log.info("MIDI output open: %s", name)
             return True
-        except (OSError, RuntimeError) as e:
+        except (OSError, RuntimeError, ValueError) as e:
+            # ValueError covers rtmidi's InvalidPortError when the device
+            # vanishes between the match and open; retried on the next poll.
             log.info("failed to open MIDI output %s: %s", name, e)
             return False
 
