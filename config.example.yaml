@@ -1,0 +1,44 @@
+# midiobs configuration. Re-point a footswitch by editing rules here, not code.
+
+midi:
+  # Substring match against the MIDI input name (case-insensitive). The port
+  # can be renamed by macOS between reboots, so match on something stable.
+  # Find yours with:  python -m midiobs --monitor
+  port_substring: "Scarlett"
+
+obs:
+  host: localhost
+  port: 4455
+  password: ""          # set to your obs-websocket password (Tools -> WebSocket Server Settings)
+
+logging:
+  level: INFO           # DEBUG logs every MIDI event and the rule decision
+  file: "~/Library/Logs/midiobs/midiobs.log"
+  max_bytes: 1048576    # rotate at 1 MiB
+  backup_count: 3
+
+# event -> action. First matching rule wins. debounce_ms defaults to 300.
+#
+# events:  start | stop | continue | program_change | control_change
+#   program_change:  number: N   or   range: [lo, hi]     (raw 0-127 wire values)
+#   control_change:  number: N   and/or   value_range: [lo, hi]
+# actions: start_record | stop_record | toggle_record | split_record_file
+#          save_replay_buffer | start_replay_buffer | stop_replay_buffer | noop
+#
+# RC-5 sends Start (0xFA) when a loop starts recording/playing and Stop (0xFC)
+# when it stops. Each start_record/stop_record pair is already a separate file.
+rules:
+  - event: start
+    action: start_record
+    debounce_ms: 500
+
+  - event: stop
+    action: stop_record
+    debounce_ms: 500
+
+  # Optional: use a memory change to cut a new file mid-recording.
+  # Needs OBS Studio 30.2+ (obs-websocket 5.5.0); otherwise it logs an error.
+  - event: program_change
+    range: [0, 127]
+    action: split_record_file
+    debounce_ms: 500
