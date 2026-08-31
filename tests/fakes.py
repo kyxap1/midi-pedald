@@ -139,12 +139,18 @@ class FakeMido:
         self.inputs = list(inputs)
         self.outputs = list(outputs)
         self.opened: list[FakePort] = []
+        self.output_scans = 0
 
     def get_input_names(self):
         return list(self.inputs)
 
     def get_output_names(self):
+        self.output_scans += 1
         return list(self.outputs)
+
+    @staticmethod
+    def Message(type, **kw):
+        return types.SimpleNamespace(type=type, **kw)
 
     def open_input(self, name, callback=None):
         p = FakePort(name, callback)

@@ -11,6 +11,7 @@ import mido
 
 from .config import Config
 from .mapping import RuleTable, to_event
+from .midi_sink import MidiSink
 from .obs_sink import ObsController
 
 log = logging.getLogger("midi_pedald")
@@ -33,6 +34,7 @@ def find_input(substring: str) -> str | None:
 #   connected -> bool                for logging only
 _SINK_BUILDERS = {
     "obs": ObsController,
+    "midi_out": MidiSink,
 }
 
 

@@ -45,7 +45,34 @@ def test_bare_action_without_sink_prefix_rejected():
 
 
 def test_action_naming_undeclared_sink_rejected():
-    expect_error({"event": "start", "action": "midi_out.cc_sequence"}, "midi_out")
+    expect_error({"event": "start", "action": "midi_out.cc_sequence", "params": {"cc": []}}, "midi_out")
+
+
+def test_midi_out_cc_sequence_valid_with_params():
+    r = rule_from_dict(
+        {"event": "start", "action": "midi_out.cc_sequence",
+         "params": {"cc": [[22, 127]], "gap_ms": 50}},
+        0,
+        {"obs", "midi_out"},
+    )
+    assert r.sink == "midi_out" and r.method == "cc_sequence"
+    assert r.params == {"cc": [[22, 127]], "gap_ms": 50}
+
+
+def test_cc_sequence_missing_required_cc_rejected():
+    expect_error(
+        {"event": "start", "action": "midi_out.cc_sequence", "params": {"gap_ms": 5}},
+        "cc",
+        sinks={"obs", "midi_out"},
+    )
+
+
+def test_cc_sequence_unknown_param_rejected():
+    expect_error(
+        {"event": "start", "action": "midi_out.cc_sequence", "params": {"cc": [], "wat": 1}},
+        "wat",
+        sinks={"obs", "midi_out"},
+    )
 
 
 def test_params_on_paramless_method_rejected():
