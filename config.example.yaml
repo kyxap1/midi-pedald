@@ -9,10 +9,9 @@ midi:
 # One block per sink. A sink absent here is disabled; a rule naming a sink with
 # no block here is a config error.
 sinks:
-  obs:
-    host: localhost
-    port: 4455
-    password: ""        # your obs-websocket password (Tools -> WebSocket Server Settings)
+  obs: {}              # port and password are read from OBS's own obs-websocket
+                       # config at connect time; set host/port/password here only
+                       # to override (e.g. OBS on another machine)
   midi_out:
     port_substring: "IAC"   # the output device CC sequences are sent to (create IAC Driver Bus 1
                             # in Audio MIDI Setup); learn these CCs on the Waveform side

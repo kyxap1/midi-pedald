@@ -17,8 +17,9 @@ meter (log-only) and is then dropped before any rule logic.
 - Apple silicon (arm64) macOS. No Python, no Xcode CLT — the `.pkg` is
   self-contained.
 - OBS Studio 28+ with obs-websocket enabled (*Tools → WebSocket Server
-  Settings → Enable*), only if you use an `obs.*` rule. OBS **30.2+** for
-  `obs.split_record_file`.
+  Settings → Enable*), only if you use an `obs.*` rule — the daemon reads the
+  port and password straight from OBS's config, nothing to copy. OBS **30.2+**
+  for `obs.split_record_file`.
 - An IAC bus, only if you use a `midi_out.*` rule — see
   [Wiring Waveform](#wiring-waveform-free).
 
@@ -42,8 +43,8 @@ The installer:
   you don't already have one** (upgrades keep yours)
 - loads a launchd agent (`pro.kyxap.midi-pedald`, `RunAtLoad` + `KeepAlive`)
 
-Then edit the config (at minimum `midi.port_substring`, and `sinks.obs.password`
-if you use OBS) and restart:
+Then edit the config (at minimum `midi.port_substring` — the OBS port and
+password are picked up from OBS automatically) and restart:
 
 ```sh
 launchctl kickstart -k gui/$(id -u)/pro.kyxap.midi-pedald
@@ -98,10 +99,10 @@ midi:
   port_substring: "Scarlett"
 
 sinks:                       # one block per sink; a sink with no block is
-  obs:                       # disabled, and a rule naming it is a config error
-    host: localhost
-    port: 4455
-    password: ""
+  obs: {}                    # disabled, and a rule naming it is a config error.
+                             # obs port + password come from OBS's own
+                             # obs-websocket config; add host/port/password
+                             # here only to override
   midi_out:
     port_substring: "IAC"
 
@@ -198,8 +199,10 @@ from Free. Re-learn the rows.
 3. **Messages in `--monitor` but the daemon does nothing.** Set
    `logging.level: DEBUG`. Either no rule matches (check `number` / `range`
    against the raw values) or the rule is debounced.
-4. **`OBS connect failed` repeating.** OBS isn't running, obs-websocket is off,
-   or the port/password is wrong. Backoff 1s→30s; it connects once OBS is up.
+4. **`OBS connect failed` repeating.** OBS isn't running, or obs-websocket is
+   off (*Tools → WebSocket Server Settings → Enable*). The daemon reads the
+   port and password from OBS's own config, so those can't be "wrong" unless
+   you overrode them in `sinks.obs`. Backoff 1s→30s; it connects once OBS is up.
 5. **`cannot split_record_file: obs-websocket has no SplitRecordFile`.** OBS
    older than 30.2. Update it, or use `stop_record` + `start_record`.
 6. **Waveform does nothing on a `midi_out` rule.** Check the CC numbers match

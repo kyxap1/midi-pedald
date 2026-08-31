@@ -6,13 +6,23 @@ its tests) load without the dependency installed.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
+from pathlib import Path
 
 log = logging.getLogger("midi_pedald")
 
 _BACKOFF_START = 1.0
 _BACKOFF_MAX = 30.0
+
+# obs-websocket writes host-local connection settings here. Layout has been
+# stable across obs-websocket 5.x; a missing file or a changed schema just
+# falls back to the defaults below.
+_OBS_WS_CONFIG = Path(
+    "~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json"
+).expanduser()
+_DEFAULT_PORT = 4455
 
 # Methods this sink exposes to rules as "obs.<name>". All take no parameters.
 OBS_METHODS = frozenset({
@@ -31,6 +41,30 @@ OBS_METHODS = frozenset({
 _GATED = {"split_record_file": "SplitRecordFile"}
 
 
+def _obs_ws_settings() -> dict:
+    try:
+        return json.loads(_OBS_WS_CONFIG.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _resolve_conn(cfg) -> tuple[str, int, str]:
+    """Fill an unset port / password from OBS's own obs-websocket config so a
+    bare `sinks: {obs: {}}` connects with nothing to copy-paste. An explicit
+    value in the daemon config always wins."""
+    host = cfg.host or "localhost"
+    port = cfg.port
+    password = cfg.password
+    if port is not None and password is not None:
+        return host, port, password
+    d = _obs_ws_settings()
+    if port is None:
+        port = int(d.get("server_port") or _DEFAULT_PORT)
+    if password is None:
+        password = str(d.get("server_password") or "") if d.get("auth_required", True) else ""
+    return host, port, password
+
+
 def _default_factory(cfg):
     import obsws_python
 
@@ -43,9 +77,8 @@ def _default_factory(cfg):
     if not _obsws_log.handlers:
         _obsws_log.addHandler(logging.NullHandler())
 
-    return obsws_python.ReqClient(
-        host=cfg.host, port=cfg.port, password=cfg.password, timeout=3
-    )
+    host, port, password = _resolve_conn(cfg)
+    return obsws_python.ReqClient(host=host, port=port, password=password, timeout=3)
 
 
 def _is_request_error(exc: BaseException) -> bool:

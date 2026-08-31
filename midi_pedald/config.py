@@ -17,8 +17,10 @@ class ConfigError(Exception):
 @dataclass
 class ObsConfig:
     host: str = "localhost"
-    port: int = 4455
-    password: str = ""
+    # None means "read it from OBS's own obs-websocket config at connect time";
+    # an explicit value here overrides that.
+    port: int | None = None
+    password: str | None = None
 
 
 @dataclass
@@ -140,9 +142,9 @@ def _parse_sinks(data: dict) -> dict[str, object]:
             raise ConfigError(f"sinks.{name} must be a mapping")
         if name == "obs":
             out["obs"] = ObsConfig(
-                host=str(sc.get("host", "localhost")),
-                port=int(sc.get("port", 4455)),
-                password=str(sc.get("password", "") or ""),
+                host=str(sc.get("host") or "localhost"),
+                port=int(sc["port"]) if sc.get("port") is not None else None,
+                password=sc["password"] if sc.get("password") not in (None, "") else None,
             )
         elif name == "midi_out":
             ps = sc.get("port_substring")

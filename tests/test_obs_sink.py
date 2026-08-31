@@ -116,6 +116,71 @@ def test_dispatch_ignores_unexpected_kwargs():
     assert cl.calls == ["start_record"]
 
 
+def _with_obs_ws_file(payload):
+    """Point obs_sink at a temp obs-websocket config.json; returns a restore fn."""
+    import json
+    import tempfile
+
+    from midi_pedald import obs_sink
+
+    d = tempfile.mkdtemp()
+    p = Path(d) / "config.json"
+    p.write_text(json.dumps(payload))
+    old = obs_sink._OBS_WS_CONFIG
+    obs_sink._OBS_WS_CONFIG = p
+
+    def restore():
+        obs_sink._OBS_WS_CONFIG = old
+        p.unlink()
+        Path(d).rmdir()
+
+    return restore
+
+
+def test_conn_autodetected_from_obs_websocket_config():
+    from midi_pedald import obs_sink
+    from midi_pedald.config import ObsConfig
+
+    restore = _with_obs_ws_file(
+        {"server_port": 4499, "server_password": "sekret", "auth_required": True}
+    )
+    try:
+        assert obs_sink._resolve_conn(ObsConfig()) == ("localhost", 4499, "sekret")
+        # an explicit daemon-config value wins over the detected one
+        assert obs_sink._resolve_conn(ObsConfig(port=9999, password="mine")) == (
+            "localhost",
+            9999,
+            "mine",
+        )
+    finally:
+        restore()
+
+
+def test_conn_ignores_password_when_obs_auth_disabled():
+    from midi_pedald import obs_sink
+    from midi_pedald.config import ObsConfig
+
+    restore = _with_obs_ws_file(
+        {"server_port": 4499, "server_password": "sekret", "auth_required": False}
+    )
+    try:
+        assert obs_sink._resolve_conn(ObsConfig()) == ("localhost", 4499, "")
+    finally:
+        restore()
+
+
+def test_conn_falls_back_to_defaults_without_obs_config():
+    from midi_pedald import obs_sink
+    from midi_pedald.config import ObsConfig
+
+    old = obs_sink._OBS_WS_CONFIG
+    obs_sink._OBS_WS_CONFIG = Path("/nonexistent/obs-websocket/config.json")
+    try:
+        assert obs_sink._resolve_conn(ObsConfig()) == ("localhost", 4455, "")
+    finally:
+        obs_sink._OBS_WS_CONFIG = old
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in sorted(globals().items()):
