@@ -25,6 +25,7 @@ pkgbuild \
     --version "$VERSION" \
     --install-location "Library/Application Support/midi-pedald/bin" \
     --root "dist/midi-pedald" \
+    --component-plist packaging/component.plist \
     --scripts packaging/scripts \
     build/pkg/component.pkg
 
