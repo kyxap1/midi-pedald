@@ -75,33 +75,98 @@ def test_dispatch_when_obs_never_connects_is_safe():
     assert oc.connected is False
 
 
-def test_reconnect_backoff_grows_and_does_not_hammer():
+def _flaky_factory(fail_first, attempts, client=None):
+    def factory(cfg):
+        attempts["n"] += 1
+        if attempts["n"] <= fail_first:
+            raise ConnectionRefusedError("nope")
+        return client or FakeReqClient()
+
+    return factory
+
+
+def test_reconnect_polls_at_a_fixed_interval_and_does_not_hammer():
     clk = Clock()
     attempts = {"n": 0}
+    oc = ObsController(CFG, client_factory=_flaky_factory(2, attempts), now=clk)
 
-    def flaky(cfg):
-        attempts["n"] += 1
-        if attempts["n"] < 3:
-            raise ConnectionRefusedError("nope")
-        return FakeReqClient()
-
-    oc = ObsController(CFG, client_factory=flaky, now=clk)
-
-    assert oc.ensure_connected() is False  # attempt 1; next retry at t=1
-    assert oc.ensure_connected() is False  # t=0 still < 1: skipped, not retried
+    assert oc.ensure_connected() is False  # attempt 1; next retry at t=5
+    assert oc.ensure_connected() is False  # t=0 still < 5: skipped, not retried
     assert attempts["n"] == 1
 
-    clk.t = 1.0
-    assert oc.ensure_connected() is False  # attempt 2; backoff now 2, next retry t=3
+    clk.t = 4.9
+    assert oc.ensure_connected() is False
+    assert attempts["n"] == 1
+
+    clk.t = 5.0
+    assert oc.ensure_connected() is False  # attempt 2; next retry at t=10
     assert attempts["n"] == 2
 
-    clk.t = 2.0
-    assert oc.ensure_connected() is False  # 2 < 3: skipped
-    assert attempts["n"] == 2
-
-    clk.t = 3.0
+    clk.t = 10.0
     assert oc.ensure_connected() is True  # attempt 3 succeeds
     assert oc.connected is True
+
+
+def test_repeated_connect_failures_log_once():
+    import logging
+
+    clk = Clock()
+    seen: list[str] = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            if record.levelno >= logging.INFO:
+                seen.append(record.getMessage())
+
+    attempts = {"n": 0}
+    oc = ObsController(CFG, client_factory=_flaky_factory(3, attempts), now=clk)
+    log = logging.getLogger("midi_pedald")
+    handler = Collect()
+    log.addHandler(handler)
+    old_level = log.level
+    log.setLevel(logging.INFO)
+    try:
+        for i in range(4):
+            clk.t = i * 5.0
+            oc.ensure_connected()
+    finally:
+        log.removeHandler(handler)
+        log.setLevel(old_level)
+
+    assert attempts["n"] == 4
+    assert len([m for m in seen if "connect failed" in m]) == 1
+    assert any("OBS connected" in m for m in seen)
+
+
+def test_dead_socket_reconnects_and_still_runs_the_action():
+    dead, live = FakeReqClient(active=True), FakeReqClient(active=True)
+
+    def die():
+        raise BrokenPipeError("[Errno 32] Broken pipe")
+
+    dead.stop_record = die
+    clients = iter([dead, live])
+    oc = ObsController(CFG, client_factory=lambda cfg: next(clients), now=Clock())
+
+    oc.dispatch("stop_record")
+
+    assert live.calls == ["stop_record"]  # the event that found the dead socket survived
+    assert oc.connected is True
+
+
+def test_dead_socket_with_no_obs_to_reconnect_to_is_safe():
+    dead = FakeReqClient(active=True)
+
+    def die():
+        raise BrokenPipeError("[Errno 32] Broken pipe")
+
+    dead.stop_record = die
+    clients = iter([dead])
+    oc = ObsController(CFG, client_factory=lambda cfg: next(clients), now=Clock())
+
+    oc.dispatch("stop_record")  # must not raise: the retry connect fails too
+
+    assert oc.connected is False
 
 
 def test_noop_action_does_nothing():

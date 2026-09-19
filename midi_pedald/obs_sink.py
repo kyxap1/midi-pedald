@@ -1,5 +1,5 @@
-"""OBS-websocket controller: lazy connect with exponential backoff, state-guarded
-record commands, and a capability gate for requests missing on older OBS builds.
+"""OBS-websocket controller: silent reconnect polling, state-guarded record
+commands, and a capability gate for requests missing on older OBS builds.
 
 `obsws_python` is imported lazily inside the default factory so this module (and
 its tests) load without the dependency installed.
@@ -13,8 +13,10 @@ from pathlib import Path
 
 log = logging.getLogger("midi_pedald")
 
-_BACKOFF_START = 1.0
-_BACKOFF_MAX = 30.0
+# Reconnect poll while OBS is down. A refused loopback connect costs nothing,
+# so this is tuned for how fast a footswitch press should find OBS back up,
+# not for sparing the CPU.
+_RETRY_S = 5.0
 
 # obs-websocket writes host-local connection settings here. Layout has been
 # stable across obs-websocket 5.x; a missing file or a changed schema just
@@ -94,8 +96,8 @@ class ObsController:
         self._client = None
         self._available: set[str] = set()
         self._warned_missing: set[str] = set()
-        self._backoff = _BACKOFF_START
         self._next_attempt = 0.0
+        self._logged_failure = False
 
     @property
     def connected(self) -> bool:
@@ -107,17 +109,22 @@ class ObsController:
         now = self._now() if now is None else now
         if now < self._next_attempt:
             return False
+        self._next_attempt = now + _RETRY_S
         try:
             self._client = self._factory(self.cfg)
             self._available = self._probe_capabilities()
-            self._backoff = _BACKOFF_START
+            self._logged_failure = False
             log.info("OBS connected")
             return True
         except Exception as e:
             self._client = None
-            self._next_attempt = now + self._backoff
-            log.info("OBS connect failed (%s); retrying in %.0fs", e, self._backoff)
-            self._backoff = min(self._backoff * 2, _BACKOFF_MAX)
+            # OBS being closed is the normal case, and this polls forever: say
+            # so once, then keep quiet until the next successful connect.
+            if self._logged_failure:
+                log.debug("OBS connect failed (%s)", e)
+            else:
+                log.info("OBS connect failed (%s); retrying every %.0fs", e, _RETRY_S)
+                self._logged_failure = True
             return False
 
     def _probe_capabilities(self) -> set[str]:
@@ -143,8 +150,7 @@ class ObsController:
             log.info("OBS connection lost: %s", why)
         self._client = None
         self._available = set()
-        self._next_attempt = self._now() + self._backoff
-        self._backoff = min(self._backoff * 2, _BACKOFF_MAX)
+        self._next_attempt = self._now() + _RETRY_S
 
     def dispatch(self, method: str, **params) -> None:
         # OBS record commands take no parameters; params is accepted for a
@@ -165,13 +171,23 @@ class ObsController:
         if handler is None:
             log.error("unknown action: %s", method)
             return
-        try:
-            handler()
-        except Exception as e:
-            if _is_request_error(e):
-                log.error("%s failed: %s", method, e)  # bad state, not a dead socket
-            else:
+        # A socket OBS closed on its own (restarted websocket server, kicked
+        # session) only surfaces when a request is written to it, so reconnect
+        # and retry once instead of losing the event that discovered it.
+        for attempt in (0, 1):
+            try:
+                handler()
+                return
+            except Exception as e:
+                if _is_request_error(e):
+                    log.error("%s failed: %s", method, e)  # bad state, not a dead socket
+                    return
                 self._drop(f"{method}: {e}")
+                if attempt:
+                    return
+                self._next_attempt = 0.0  # stale socket, not a down OBS: reconnect now
+                if not self.ensure_connected():
+                    return
 
     def _record_active(self) -> bool:
         return bool(self._client.get_record_status().output_active)
