@@ -56,6 +56,13 @@ xattr -dr com.apple.quarantine "$BIN"
 # bootout only what is actually loaded (a first install has nothing to unload).
 if launchctl print "gui/$TARGET_UID/$LABEL" >/dev/null 2>&1; then
     launchctl bootout "gui/$TARGET_UID/$LABEL"
+    # bootout returns before launchd has finished dropping the job, and
+    # bootstrapping into that window fails with "Bootstrap failed: 5:
+    # Input/output error", which fails the whole install.
+    for _ in $(seq 25); do
+        launchctl print "gui/$TARGET_UID/$LABEL" >/dev/null 2>&1 || break
+        sleep 0.2
+    done
 fi
 launchctl bootstrap "gui/$TARGET_UID" "$PLIST"
 

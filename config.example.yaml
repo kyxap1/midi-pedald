@@ -15,6 +15,9 @@ sinks:
   midi_out:
     port_substring: "IAC"   # the output device CC sequences are sent to (create IAC Driver Bus 1
                             # in Audio MIDI Setup); learn these CCs on the Waveform side
+  sound:
+    volume: 0.5             # afplay -v: 1.0 is the file's own level
+    max_ms: 150             # playback is cut here; see the rule order note below
 
 bpm:
   enabled: true
@@ -38,14 +41,26 @@ logging:
 #   obs:       start_record | stop_record | toggle_record | split_record_file
 #              save_replay_buffer | start_replay_buffer | stop_replay_buffer
 #   midi_out:  cc_sequence   params: { cc: [[num, val], ...], gap_ms: N }
+#   sound:     play          params: { file: "Tink" }   bare name = a sound from
+#              /System/Library/Sounds, anything with a "/" is a path
 #
 # Put obs rules above midi_out rules: a cc_sequence gap_ms blocks the dispatch
 # loop for its duration, so OBS should fire first.
+#
+# sound.play blocks too, and that is what keeps the blip out of the recording
+# when OBS records the same output device (an interface loopback): the blip
+# fires *before* obs.start_record and *after* obs.stop_record, so the take
+# never contains it. The price is on start only — the blip plus afplay's own
+# startup delay the take by roughly max_ms + 0.25s.
 #
 # RC-5 sends Start (0xFA) when a loop starts recording/playing and Stop (0xFC)
 # when it stops. Each start_record/stop_record pair is already a separate file.
 # CC 20 = record, 21 = stop, 22 = rewind — arbitrary, learned on the Waveform side.
 rules:
+  - event: start
+    action: sound.play
+    debounce_ms: 500
+    params: { file: "Tink" }
   - event: start
     action: obs.start_record
     debounce_ms: 500
@@ -61,6 +76,10 @@ rules:
     action: midi_out.cc_sequence
     debounce_ms: 500
     params: { cc: [[21, 127], [22, 127]], gap_ms: 50 }
+  - event: stop
+    action: sound.play
+    debounce_ms: 500
+    params: { file: "Bottle" }
 
   # Optional: use a memory change to cut a new file mid-recording.
   # Needs OBS Studio 30.2+ (obs-websocket 5.5.0); otherwise it logs an error.

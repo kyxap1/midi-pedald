@@ -8,6 +8,7 @@ from pathlib import Path
 from .mapping import EVENTS, Rule
 from .midi_sink import MIDI_OUT_METHODS
 from .obs_sink import OBS_METHODS
+from .sound_sink import SOUND_METHODS
 
 
 class ConfigError(Exception):
@@ -29,6 +30,15 @@ class MidiOutConfig:
 
 
 @dataclass
+class SoundConfig:
+    # afplay's -v: 1.0 is the file's own level, above that amplifies.
+    volume: float = 1.0
+    # A blip placed before obs.start_record delays the take by its own length
+    # plus ~0.25s of afplay startup, so it is cut short rather than played out.
+    max_ms: int = 150
+
+
+@dataclass
 class BpmConfig:
     enabled: bool = True
     window_ticks: int = 96
@@ -37,12 +47,22 @@ class BpmConfig:
 
 
 # Sink type -> the method names a rule may name as "<sink>.<method>".
-SINK_METHODS: dict[str, frozenset] = {"obs": OBS_METHODS, "midi_out": MIDI_OUT_METHODS}
+SINK_METHODS: dict[str, frozenset] = {
+    "obs": OBS_METHODS,
+    "midi_out": MIDI_OUT_METHODS,
+    "sound": SOUND_METHODS,
+}
 
 # "<sink>.<method>" -> accepted param names / the subset that is required.
 # Absent entry means the method takes no params.
-SINK_METHOD_PARAMS: dict[str, set] = {"midi_out.cc_sequence": {"cc", "gap_ms"}}
-SINK_METHOD_REQUIRED: dict[str, set] = {"midi_out.cc_sequence": {"cc"}}
+SINK_METHOD_PARAMS: dict[str, set] = {
+    "midi_out.cc_sequence": {"cc", "gap_ms"},
+    "sound.play": {"file"},
+}
+SINK_METHOD_REQUIRED: dict[str, set] = {
+    "midi_out.cc_sequence": {"cc"},
+    "sound.play": {"file"},
+}
 
 
 _DEFAULT_LOG_FILE = "~/Library/Logs/midi-pedald/midi-pedald.log"
@@ -151,6 +171,17 @@ def _parse_sinks(data: dict) -> dict[str, object]:
             if not ps or not isinstance(ps, str):
                 raise ConfigError("sinks.midi_out.port_substring is required and must be a string")
             out["midi_out"] = MidiOutConfig(port_substring=ps)
+        elif name == "sound":
+            try:
+                volume = float(sc.get("volume", 1.0))
+            except (TypeError, ValueError):
+                raise ConfigError("sinks.sound.volume must be a number")
+            if volume <= 0:
+                raise ConfigError("sinks.sound.volume must be greater than 0")
+            max_ms = sc.get("max_ms", 150)
+            if not isinstance(max_ms, int) or max_ms <= 0:
+                raise ConfigError("sinks.sound.max_ms must be a positive integer")
+            out["sound"] = SoundConfig(volume=volume, max_ms=max_ms)
         else:
             raise ConfigError(f"unknown sink {name!r} (known: {sorted(SINK_METHODS)})")
     return out
