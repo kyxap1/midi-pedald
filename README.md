@@ -105,9 +105,10 @@ sinks:                       # one block per sink; a sink with no block is
                              # here only to override
   midi_out:
     port_substring: "IAC"
-  sound:
-    volume: 0.5              # afplay -v: 1.0 is the file's own level
-    max_ms: 150              # playback is cut here; see the rule order note
+  overlay:
+    right_px: 25             # from the right edge, clear of the macOS indicators
+    size_px: 10              # the red core; top_px unset centres it in the menu bar
+    ring_px: 2               # dark translucent bezel around the dot, 0 for none
 
 bpm:
   enabled: true
@@ -155,19 +156,18 @@ shows memory numbers from 1, so its "memory 1" is Program Change `0` on the wire
 | `obs.split_record_file` | close the file, start a new one (OBS 30.2+) |
 | `obs.save_replay_buffer` / `obs.start_replay_buffer` / `obs.stop_replay_buffer` | replay buffer |
 | `midi_out.cc_sequence` | send CCs in order; `params: { cc: [[num, val], ...], gap_ms: N }` |
-| `sound.play` | blip through `afplay`; `params: { file: "Tink" }` — a bare name is a sound from `/System/Library/Sounds`, anything with a `/` is a path |
+| `overlay.show` / `overlay.hide` | a red dot above every window, including full-screen apps and games |
 
 A `cc_sequence` `gap_ms` blocks the dispatch loop for its duration, so put
 `obs.*` rules **above** `midi_out.*` rules. The MIDI callback only enqueues, so
 nothing is dropped while the loop is busy.
 
-`sound.play` blocks as well, and that is the point. `afplay` always plays to
-the **default output device** — it has no device flag — so if OBS records that
-same device (an interface loopback), a blip fired alongside the recording ends
-up inside it. Ordering keeps it out: `sound.play` **before** `obs.start_record`
-and **after** `obs.stop_record`. Only the start pays for it, by roughly
-`max_ms` + 0.25s of `afplay` startup. Stock sounds are 0.5–1.6s long, hence
-`max_ms`.
+The overlay is a separate Swift helper shipped beside the daemon, because AppKit
+has to own the main thread's run loop and the dispatch loop already does. It
+draws above the menu bar and above full-screen apps; only a display captured
+with `CGDisplayCapture` covers it. The dot never takes focus, and it exits when
+the daemon does, so it cannot get stranded on screen. `show` while it is already
+up is a no-op, so a rule can safely fire on every press.
 
 Debounce is per rule: firing one rule never debounces another on the same event.
 That per-rule debounce is what still protects against a doubled pedal press.

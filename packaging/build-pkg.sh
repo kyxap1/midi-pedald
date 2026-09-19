@@ -18,6 +18,13 @@ pyinstaller --clean --noconfirm packaging/midi-pedald.spec
 # once hardware is present, but it does catch a broken freeze in CI.
 ./dist/midi-pedald/midi-pedald --version
 
+# The overlay dot is AppKit, which insists on owning a main-thread run loop the
+# daemon already uses, so it ships as a helper binary beside the daemon. Built
+# after PyInstaller, which owns build/ while it runs.
+mkdir -p build
+swiftc -O -o build/overlay-dot packaging/overlay-dot.swift
+cp build/overlay-dot dist/midi-pedald/
+
 mkdir -p build/pkg
 
 pkgbuild \
