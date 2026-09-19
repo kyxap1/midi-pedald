@@ -199,10 +199,11 @@ from Free. Re-learn the rows.
 3. **Messages in `--monitor` but the daemon does nothing.** Set
    `logging.level: DEBUG`. Either no rule matches (check `number` / `range`
    against the raw values) or the rule is debounced.
-4. **`OBS connect failed` repeating.** OBS isn't running, or obs-websocket is
+4. **`OBS connect failed`.** OBS isn't running, or obs-websocket is
    off (*Tools → WebSocket Server Settings → Enable*). The daemon reads the
    port and password from OBS's own config, so those can't be "wrong" unless
-   you overrode them in `sinks.obs`. Backoff 1s→30s; it connects once OBS is up.
+   you overrode them in `sinks.obs`. It is logged once, then retried silently
+   every 5s, and logs `OBS connected` once OBS is up.
 5. **`cannot split_record_file: obs-websocket has no SplitRecordFile`.** OBS
    older than 30.2. Update it, or use `stop_record` + `start_record`.
 6. **Waveform does nothing on a `midi_out` rule.** Check the CC numbers match
