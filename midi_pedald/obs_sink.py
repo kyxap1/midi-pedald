@@ -189,6 +189,18 @@ class ObsController:
                 if not self.ensure_connected():
                     return
 
+    def record_active(self) -> bool | None:
+        """Live recording state, or None when OBS is unreachable. None means
+        "unknown", never "not recording": a caller showing an indicator must
+        leave it alone rather than clear it."""
+        if not self.ensure_connected():
+            return None
+        try:
+            return self._record_active()
+        except Exception as e:
+            self._drop(f"get_record_status: {e}")
+            return None
+
     def _record_active(self) -> bool:
         return bool(self._client.get_record_status().output_active)
 

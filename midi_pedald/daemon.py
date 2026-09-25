@@ -20,6 +20,10 @@ log = logging.getLogger("midi_pedald")
 
 _PORT_POLL_S = 2.0
 
+# How often the overlay dot is reconciled against OBS's real recording state.
+# A loopback GetRecordStatus is cheap; this bounds how long the dot can lie.
+_RECORD_POLL_S = 0.25
+
 
 def _input_names() -> list[str]:
     # rtmidi raises mid-enumeration when a device is unplugged during the scan;
@@ -75,6 +79,8 @@ class Daemon:
         self._q: queue.Queue = queue.Queue(maxsize=1000)
         self._port = None
         self._next_poll = 0.0
+        self._next_state_poll = 0.0
+        self._obs_owns_overlay = False
         self._stop = False
 
     def _on_midi(self, msg) -> None:
@@ -125,6 +131,23 @@ class Daemon:
             pass
         self._port = None
 
+    def _sync_overlay(self, now: float) -> None:
+        """While OBS answers, it owns the dot: the indicator has to mean "OBS is
+        recording", not "a rule fired" - a start_record that was skipped or
+        refused used to leave the dot lit over nothing. show/hide are
+        idempotent, so no edge detection is needed and a helper that died is
+        respawned."""
+        obs, overlay = self.sinks.get("obs"), self.sinks.get("overlay")
+        if obs is None or overlay is None or now < self._next_state_poll:
+            return
+        self._next_state_poll = now + _RECORD_POLL_S
+        active = obs.record_active()
+        # Unknown state hands the dot back to the rules and leaves it as it is:
+        # OBS going unreachable says nothing about whether it stopped recording.
+        self._obs_owns_overlay = active is not None
+        if active is not None:
+            overlay.dispatch("show" if active else "hide")
+
     def _handle(self, msg) -> None:
         ev = to_event(msg)
         decisions = self.rules.decide_all(ev, time.monotonic())
@@ -132,6 +155,9 @@ class Daemon:
             log.debug("MIDI %s -> nothing (no rule matched)", ev)
             return
         for d in decisions:
+            if d.sink == "overlay" and self._obs_owns_overlay:
+                log.debug("MIDI %s -> overlay.%s suppressed (OBS owns the dot)", ev, d.method)
+                continue
             sink = self.sinks.get(d.sink)
             if sink is None:
                 # config validation rejects this, so only reachable if the sink
@@ -155,6 +181,7 @@ class Daemon:
                 self._ensure_port(now)
                 for sink in self.sinks.values():
                     sink.ensure_connected(now)
+                self._sync_overlay(now)
                 try:
                     msg = self._q.get(timeout=0.2)
                 except queue.Empty:

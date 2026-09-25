@@ -109,6 +109,80 @@ def test_open_input_raising_invalidporterror_does_not_propagate():
         daemon.mido = saved
 
 
+class FakeObs(FakeSink):
+    """A FakeSink that also answers the obs-only record_active() probe."""
+
+    def __init__(self, record=None):
+        super().__init__()
+        self.record = record  # None = OBS unreachable
+        self.probes = 0
+
+    def record_active(self):
+        self.probes += 1
+        return self.record
+
+
+def daemon_with_overlay(record):
+    c = cfg(
+        rules=[Rule("start", "obs.start_record"), Rule("start", "overlay.show")],
+        sinks={"obs": ObsConfig(), "overlay": ObsConfig()},
+    )
+    obs, overlay = FakeObs(record), FakeSink()
+    return Daemon(c, sinks={"obs": obs, "overlay": overlay}), obs, overlay
+
+
+def test_overlay_follows_obs_recording():
+    dae, _, overlay = daemon_with_overlay(True)
+    dae._sync_overlay(0.0)
+    assert overlay.calls == [("show", {})]
+
+
+def test_overlay_is_cleared_when_obs_is_not_recording():
+    dae, _, overlay = daemon_with_overlay(False)
+    dae._sync_overlay(0.0)
+    assert overlay.calls == [("hide", {})]
+
+
+def test_overlay_is_left_alone_when_obs_state_is_unknown():
+    dae, _, overlay = daemon_with_overlay(None)
+    dae._sync_overlay(0.0)
+    assert overlay.calls == []
+
+
+def test_obs_state_is_not_polled_faster_than_the_interval():
+    dae, obs, _ = daemon_with_overlay(False)
+    dae._sync_overlay(0.0)
+    dae._sync_overlay(0.1)
+    assert obs.probes == 1
+    dae._sync_overlay(daemon._RECORD_POLL_S)
+    assert obs.probes == 2
+
+
+def test_overlay_rules_are_suppressed_while_obs_owns_the_dot():
+    dae, obs, overlay = daemon_with_overlay(False)
+    dae._sync_overlay(0.0)
+    overlay.calls.clear()
+    dae._handle(start())
+    assert obs.calls == [("start_record", {})]  # the obs rule still fires
+    assert overlay.calls == []  # the dot stays OBS's to set
+
+
+def test_overlay_rules_drive_the_dot_again_once_obs_goes_away():
+    dae, obs, overlay = daemon_with_overlay(True)
+    dae._sync_overlay(0.0)
+    obs.record = None
+    dae._sync_overlay(daemon._RECORD_POLL_S)
+    overlay.calls.clear()
+    dae._handle(start())
+    assert overlay.calls == [("show", {})]
+
+
+def test_obs_is_not_polled_without_an_overlay_sink():
+    obs = FakeObs(True)
+    Daemon(cfg(), sinks={"obs": obs})._sync_overlay(0.0)
+    assert obs.probes == 0
+
+
 def test_run_pumps_ensure_connected_on_every_sink_then_stops_cleanly():
     a = FakeSink()
 

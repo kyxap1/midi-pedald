@@ -169,6 +169,35 @@ def test_dead_socket_with_no_obs_to_reconnect_to_is_safe():
     assert oc.connected is False
 
 
+def test_record_active_reports_the_live_state():
+    oc, _, _ = controller(active=True)
+    assert oc.record_active() is True
+    oc, _, _ = controller(active=False)
+    assert oc.record_active() is False
+
+
+def test_record_active_is_none_when_obs_is_unreachable():
+    def boom(cfg):
+        raise ConnectionRefusedError("no obs")
+
+    oc = ObsController(CFG, client_factory=boom, now=Clock())
+    assert oc.record_active() is None  # unknown, not "not recording"
+
+
+def test_record_active_on_a_dead_socket_drops_and_reports_unknown():
+    dead = FakeReqClient(active=True)
+
+    def die():
+        raise BrokenPipeError("[Errno 32] Broken pipe")
+
+    dead.get_record_status = die
+    clients = iter([dead])
+    oc = ObsController(CFG, client_factory=lambda cfg: next(clients), now=Clock())
+
+    assert oc.record_active() is None
+    assert oc.connected is False
+
+
 def test_noop_action_does_nothing():
     oc, cl, _ = controller()
     oc.dispatch("noop")

@@ -44,7 +44,9 @@ logging:
 #              save_replay_buffer | start_replay_buffer | stop_replay_buffer
 #   midi_out:  cc_sequence   params: { cc: [[num, val], ...], gap_ms: N }
 #   overlay:   show | hide   a red dot above every window, including full-screen
-#              apps and games; it stays up until hide, and dies with the daemon
+#              apps and games; it stays up until hide, and dies with the daemon.
+#              While OBS answers, the dot mirrors its real recording state and
+#              these rules are ignored; they only drive it when OBS is unreachable.
 #
 # Put obs rules above midi_out rules: a cc_sequence gap_ms blocks the dispatch
 # loop for its duration, so OBS should fire first.
