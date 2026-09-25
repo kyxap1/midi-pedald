@@ -57,8 +57,18 @@ def sink(cfg=None, **spawn_kw):
 def test_show_spawns_the_helper_with_the_configured_geometry():
     s, sp = sink(OverlayConfig(right_px=25, size_px=10, ring_px=2))
     s.dispatch("show")
-    assert sp.calls[0][1:] == ["--size", "10", "--right", "25", "--ring", "2"]
+    assert sp.calls[0][1:] == ["--size", "10", "--right", "25", "--ring", "2", "--color", "red"]
     assert sp.calls[0][0].endswith("overlay-dot")
+
+
+def test_show_in_another_colour_replaces_the_dot():
+    s, sp = sink()
+    s.dispatch("show", color="blue")
+    s.dispatch("show", color="blue")
+    s.dispatch("show")
+    assert len(sp.calls) == 2
+    assert sp.procs[0].closed
+    assert sp.calls[1][-2:] == ["--color", "red"]
 
 
 def test_top_is_left_to_the_helper_unless_configured():

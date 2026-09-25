@@ -156,7 +156,7 @@ shows memory numbers from 1, so its "memory 1" is Program Change `0` on the wire
 | `obs.split_record_file` | close the file, start a new one (OBS 30.2+) |
 | `obs.save_replay_buffer` / `obs.start_replay_buffer` / `obs.stop_replay_buffer` | replay buffer |
 | `midi_out.cc_sequence` | send CCs in order; `params: { cc: [[num, val], ...], gap_ms: N }` |
-| `overlay.show` / `overlay.hide` | a red dot above every window, including full-screen apps and games |
+| `overlay.show` / `overlay.hide` | a dot above every window, including full-screen apps and games: red while OBS records, blue when OBS is not connected |
 
 A `cc_sequence` `gap_ms` blocks the dispatch loop for its duration, so put
 `obs.*` rules **above** `midi_out.*` rules. The MIDI callback only enqueues, so

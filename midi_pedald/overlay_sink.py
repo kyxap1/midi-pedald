@@ -36,6 +36,7 @@ class OverlaySink:
         self.cfg = cfg
         self._spawn = spawn
         self._proc = None
+        self._color = None
 
     @property
     def connected(self) -> bool:
@@ -46,20 +47,25 @@ class OverlaySink:
 
     def dispatch(self, method: str, **params) -> None:
         if method == "show":
-            self._show()
+            self._show(params.get("color", "red"))
         elif method == "hide":
             self._hide()
         else:
             log.error("unknown overlay method: %s", method)
 
-    def _show(self) -> None:
+    def _show(self, color: str) -> None:
         if self._proc is not None and self._proc.poll() is None:
-            return
+            if color == self._color:
+                return
+            # The helper draws once at startup, so a new colour needs a new helper.
+            self._hide()
+        self._color = color
         cmd = [
             str(helper_path()),
             "--size", str(self.cfg.size_px),
             "--right", str(self.cfg.right_px),
             "--ring", str(self.cfg.ring_px),
+            "--color", color,
         ]
         if self.cfg.top_px is not None:
             cmd += ["--top", str(self.cfg.top_px)]

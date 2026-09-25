@@ -22,6 +22,11 @@ let ring = arg("--ring", 2)
 // that strip rather than guessing a constant.
 let menuBar = screen.frame.maxY - screen.visibleFrame.maxY
 let top = arg("--top", max(0, (menuBar - size) / 2))
+// Red: OBS is recording. Blue: the pedal reached the daemon but OBS is not
+// connected, so nothing is recording.
+let colors: [String: NSColor] = ["red": .systemRed, "blue": .systemBlue]
+let argv = CommandLine.arguments
+let color = argv.firstIndex(of: "--color").flatMap { $0 + 1 < argv.count ? colors[argv[$0 + 1]] : nil } ?? .systemRed
 
 let app = NSApplication.shared
 // No Dock icon, and orderFrontRegardless below never takes focus: whatever the
@@ -54,7 +59,7 @@ bezel.layer?.cornerRadius = outer / 2
 
 let dot = NSView(frame: NSRect(x: ring, y: ring, width: size, height: size))
 dot.wantsLayer = true
-dot.layer?.backgroundColor = NSColor.systemRed.cgColor
+dot.layer?.backgroundColor = color.cgColor
 dot.layer?.cornerRadius = size / 2
 bezel.addSubview(dot)
 win.contentView = bezel

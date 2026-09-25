@@ -174,7 +174,14 @@ def test_overlay_rules_drive_the_dot_again_once_obs_goes_away():
     dae._sync_overlay(daemon._RECORD_POLL_S)
     overlay.calls.clear()
     dae._handle(start())
-    assert overlay.calls == [("show", {})]
+    assert overlay.calls == [("show", {"color": "blue"})]
+
+
+def test_overlay_rules_light_the_dot_blue_without_an_obs_sink():
+    c = cfg(rules=[Rule("start", "overlay.show")], sinks={"overlay": ObsConfig()})
+    overlay = FakeSink()
+    Daemon(c, sinks={"overlay": overlay})._handle(start())
+    assert overlay.calls == [("show", {"color": "blue"})]
 
 
 def test_obs_is_not_polled_without_an_overlay_sink():

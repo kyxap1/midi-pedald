@@ -155,9 +155,13 @@ class Daemon:
             log.debug("MIDI %s -> nothing (no rule matched)", ev)
             return
         for d in decisions:
-            if d.sink == "overlay" and self._obs_owns_overlay:
-                log.debug("MIDI %s -> overlay.%s suppressed (OBS owns the dot)", ev, d.method)
-                continue
+            params = d.params
+            if d.sink == "overlay":
+                if self._obs_owns_overlay:
+                    log.debug("MIDI %s -> overlay.%s suppressed (OBS owns the dot)", ev, d.method)
+                    continue
+                # Blue, not red: the pedal reached the daemon but nothing records.
+                params = {**d.params, "color": "blue"}
             sink = self.sinks.get(d.sink)
             if sink is None:
                 # config validation rejects this, so only reachable if the sink
@@ -165,7 +169,7 @@ class Daemon:
                 log.warning("rule %d: sink %r unavailable, dropping %s", d.rule_index, d.sink, d.method)
                 continue
             log.debug("MIDI %s -> %s.%s (%s)", ev, d.sink, d.method, d.reason)
-            sink.dispatch(d.method, **d.params)
+            sink.dispatch(d.method, **params)
 
     def run(self) -> None:
         signal.signal(signal.SIGTERM, self._on_signal)
